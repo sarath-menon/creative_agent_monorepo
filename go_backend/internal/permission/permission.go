@@ -1,0 +1,134 @@
+package permission
+
+import (
+	"errors"
+	"log"
+	"path/filepath"
+	"slices"
+	"sync"
+	"time"
+
+	"github.com/google/uuid"
+	"go_general_agent/internal/config"
+	"go_general_agent/internal/pubsub"
+)
+
+var ErrorPermissionDenied = errors.New("permission denied")
+
+type CreatePermissionRequest struct {
+	SessionID   string `json:"session_id"`
+	ToolName    string `json:"tool_name"`
+	Description string `json:"description"`
+	Action      string `json:"action"`
+	Params      any    `json:"params"`
+	Path        string `json:"path"`
+}
+
+type PermissionRequest struct {
+	ID          string `json:"id"`
+	SessionID   string `json:"session_id"`
+	ToolName    string `json:"tool_name"`
+	Description string `json:"description"`
+	Action      string `json:"action"`
+	Params      any    `json:"params"`
+	Path        string `json:"path"`
+}
+
+type Service interface {
+	pubsub.Suscriber[PermissionRequest]
+	GrantPersistant(permission PermissionRequest)
+	Grant(permission PermissionRequest)
+	Deny(permission PermissionRequest)
+	Request(opts CreatePermissionRequest) bool
+	AutoApproveSession(sessionID string)
+}
+
+type permissionService struct {
+	*pubsub.Broker[PermissionRequest]
+
+	sessionPermissions  []PermissionRequest
+	pendingRequests     sync.Map
+	autoApproveSessions []string
+}
+
+func (s *permissionService) GrantPersistant(permission PermissionRequest) {
+	respCh, ok := s.pendingRequests.Load(permission.ID)
+	if ok {
+		respCh.(chan bool) <- true
+	}
+	s.sessionPermissions = append(s.sessionPermissions, permission)
+}
+
+func (s *permissionService) Grant(permission PermissionRequest) {
+	respCh, ok := s.pendingRequests.Load(permission.ID)
+	if ok {
+		respCh.(chan bool) <- true
+	}
+}
+
+func (s *permissionService) Deny(permission PermissionRequest) {
+	respCh, ok := s.pendingRequests.Load(permission.ID)
+	if ok {
+		respCh.(chan bool) <- false
+	}
+}
+
+func (s *permissionService) Request(opts CreatePermissionRequest) bool {
+	log.Printf("Permission request: SessionID=%s, ToolName=%s, Action=%s, Path=%s", 
+		opts.SessionID, opts.ToolName, opts.Action, opts.Path)
+	
+	if slices.Contains(s.autoApproveSessions, opts.SessionID) {
+		log.Printf("Auto-approved permission for session %s", opts.SessionID)
+		return true
+	}
+	
+	dir := filepath.Dir(opts.Path)
+	if dir == "." {
+		dir = config.WorkingDirectory()
+	}
+	permission := PermissionRequest{
+		ID:          uuid.New().String(),
+		Path:        dir,
+		SessionID:   opts.SessionID,
+		ToolName:    opts.ToolName,
+		Description: opts.Description,
+		Action:      opts.Action,
+		Params:      opts.Params,
+	}
+
+	for _, p := range s.sessionPermissions {
+		if p.ToolName == permission.ToolName && p.Action == permission.Action && p.SessionID == permission.SessionID && p.Path == permission.Path {
+			log.Printf("Found existing permission for %s:%s in session %s", permission.ToolName, permission.Action, permission.SessionID)
+			return true
+		}
+	}
+
+	respCh := make(chan bool, 1)
+
+	s.pendingRequests.Store(permission.ID, respCh)
+	defer s.pendingRequests.Delete(permission.ID)
+
+	log.Printf("Publishing permission request %s for approval", permission.ID)
+	s.Publish(pubsub.CreatedEvent, permission)
+
+	// Wait for the response with a timeout (30 seconds)
+	select {
+	case resp := <-respCh:
+		log.Printf("Permission %s responded: %t", permission.ID, resp)
+		return resp
+	case <-time.After(30 * time.Second):
+		log.Printf("Permission request %s timed out after 30 seconds, denying", permission.ID)
+		return false
+	}
+}
+
+func (s *permissionService) AutoApproveSession(sessionID string) {
+	s.autoApproveSessions = append(s.autoApproveSessions, sessionID)
+}
+
+func NewPermissionService() Service {
+	return &permissionService{
+		Broker:             pubsub.NewBroker[PermissionRequest](),
+		sessionPermissions: make([]PermissionRequest, 0),
+	}
+}

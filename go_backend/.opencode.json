@@ -1,0 +1,18 @@
+{
+  "$schema": "./opencode-schema.json",
+  "llm": {
+    "provider": "gemini",
+    "model": "gemini-2.5-flash"
+  },
+  "mcpServers": {
+    "blender": {
+          "type": "stdio",
+          "command": "uvx",
+          "allowedTools": ["execute_blender_code"],
+          "args": [
+            "blender-mcp"
+          ],
+          "env": []
+        }
+  }
+}
