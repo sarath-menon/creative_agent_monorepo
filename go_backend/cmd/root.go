@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"go_general_agent/internal/api"
@@ -272,6 +273,16 @@ func startHTTPServer(ctx context.Context, app *app.App, host string, port int) e
 	// Add SSE streaming endpoint
 	mux.HandleFunc("/stream", func(w http.ResponseWriter, r *http.Request) {
 		httphandlers.HandleSSEStream(ctx, handler, w, r)
+	})
+
+	// Add message queue endpoint for persistent SSE
+	mux.HandleFunc("/stream/", func(w http.ResponseWriter, r *http.Request) {
+		// Only handle message queueing paths like /stream/{sessionId}/message
+		if strings.HasSuffix(r.URL.Path, "/message") {
+			httphandlers.HandleMessageQueue(w, r)
+		} else {
+			http.NotFound(w, r)
+		}
 	})
 
 	mux.HandleFunc("/rpc", func(w http.ResponseWriter, r *http.Request) {

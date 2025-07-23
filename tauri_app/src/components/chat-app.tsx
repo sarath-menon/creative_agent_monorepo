@@ -31,7 +31,7 @@ import { type FormEventHandler, useState, useEffect, useRef } from 'react';
 
 import { useSession } from '@/hooks/useSession';
 import { useSendMessage } from '@/hooks/useMessages';
-import { useSSEStream } from '@/hooks/useSSEStream';
+import { usePersistentSSE } from '@/hooks/usePersistentSSE';
 import { LoadingDots } from './loading-dots';
 
 
@@ -68,14 +68,10 @@ export function ChatApp() {
   const [showSlashCommands, setShowSlashCommands] = useState(false);
   const [selectedCommandIndex, setSelectedCommandIndex] = useState(0);
   const [inputElement, setInputElement] = useState<HTMLTextAreaElement | null>(null);
-  
-  // State for current streaming request
-  const [streamingSessionId, setStreamingSessionId] = useState<string>('');
-  const [streamingContent, setStreamingContent] = useState<string>('');
 
   const { data: session, isLoading: sessionLoading, error: sessionError } = useSession();
   const sendMessage = useSendMessage();
-  const sseStream = useSSEStream(streamingSessionId, streamingContent);
+  const sseStream = usePersistentSSE(session?.id || '');
 
   const handleTextChange = (value: string) => {
     setText(value);
@@ -136,7 +132,7 @@ export function ChatApp() {
 
   // Handle completion of streaming
   useEffect(() => {
-    if (sseStream.completed && sseStream.finalContent) {
+    if (sseStream.completed && sseStream.finalContent && !sseStream.processing) {
       // Convert SSE tool calls to our Message format
       const convertedToolCalls: ToolCall[] = sseStream.toolCalls.map(tc => ({
         name: tc.name,
@@ -152,28 +148,20 @@ export function ChatApp() {
         from: 'assistant',
         toolCalls: convertedToolCalls.length > 0 ? convertedToolCalls : undefined
       }]);
-      
-      // Clear streaming state
-      setStreamingSessionId('');
-      setStreamingContent('');
     }
-  }, [sseStream.completed, sseStream.finalContent, sseStream.toolCalls]);
+  }, [sseStream.completed, sseStream.finalContent, sseStream.processing]);
 
   // Handle streaming errors
   useEffect(() => {
     if (sseStream.error) {
       const errorMessage = `Failed to send prompt: ${sseStream.error}`;
       setMessages(prev => [...prev, { content: errorMessage, from: 'assistant' }]);
-      
-      // Clear streaming state
-      setStreamingSessionId('');
-      setStreamingContent('');
     }
   }, [sseStream.error]);
 
   const handleSubmit: FormEventHandler<HTMLFormElement> = async (event) => {
     event.preventDefault();
-    if (!text || !session?.id) {
+    if (!text || !session?.id || !sseStream.connected) {
       return;
     }
     
@@ -183,9 +171,13 @@ export function ChatApp() {
     setMessages(prev => [...prev, { content: messageText, from: 'user' }]);
     setText('');
     
-    // Start SSE streaming
-    setStreamingSessionId(session.id);
-    setStreamingContent(messageText);
+    // Send message via persistent SSE
+    try {
+      await sseStream.sendMessage(messageText);
+    } catch (error) {
+      console.error('Failed to send message:', error);
+      // Error will be handled by the error useEffect
+    }
   };
 
   return (
@@ -224,7 +216,7 @@ export function ChatApp() {
               </AIMessageContent>
             </AIMessage>
           ))}
-          {(sseStream.connecting || sseStream.connected) && (
+          {sseStream.processing && (
             <AIMessage from="assistant">
               <AIMessageContent>
                 {sseStream.toolCalls.length > 0 ? (
@@ -293,8 +285,8 @@ export function ChatApp() {
             </AIInputTools>
             <AIInputSubmit 
 
-              disabled={!text || !session?.id || sessionLoading} 
-              status={(sseStream.connecting || sseStream.connected) ? 'streaming' : sseStream.error ? 'error' : 'ready'} 
+              disabled={!text || !session?.id || sessionLoading || !sseStream.connected} 
+              status={sseStream.processing ? 'streaming' : sseStream.error ? 'error' : 'ready'} 
             />
           </AIInputToolbar>
         </AIInput>

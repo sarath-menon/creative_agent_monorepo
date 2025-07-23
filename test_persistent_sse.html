@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Persistent SSE</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        #messages { border: 1px solid #ccc; height: 400px; overflow-y: auto; padding: 10px; margin: 10px 0; }
+        #messageInput { width: 300px; padding: 5px; }
+        button { padding: 5px 10px; margin: 5px; }
+        .event { margin: 5px 0; padding: 5px; border-left: 3px solid #007cba; }
+        .error { border-left-color: #d32f2f; }
+        .complete { border-left-color: #388e3c; }
+        .tool { border-left-color: #f57c00; }
+    </style>
+</head>
+<body>
+    <h1>Test Persistent SSE</h1>
+    
+    <div>
+        <input type="text" id="sessionId" placeholder="Session ID" value="test-session-123">
+        <button onclick="connect()">Connect SSE</button>
+        <button onclick="disconnect()">Disconnect</button>
+    </div>
+    
+    <div>
+        <input type="text" id="messageInput" placeholder="Enter message" value="Hello, how are you?">
+        <button onclick="sendMessage()">Send Message</button>
+    </div>
+    
+    <div>
+        <strong>Connection Status:</strong> <span id="status">Disconnected</span>
+    </div>
+    
+    <div id="messages"></div>
+
+    <script>
+        let eventSource = null;
+        let sessionId = null;
+
+        function connect() {
+            sessionId = document.getElementById('sessionId').value;
+            if (!sessionId) {
+                alert('Please enter a session ID');
+                return;
+            }
+
+            disconnect(); // Close existing connection if any
+
+            const url = `http://localhost:8088/stream?sessionId=${sessionId}`;
+            console.log('Connecting to:', url);
+            
+            eventSource = new EventSource(url);
+            
+            eventSource.onopen = function(event) {
+                console.log('Connection opened:', event);
+                document.getElementById('status').textContent = 'Connected';
+            };
+            
+            eventSource.onerror = function(event) {
+                console.log('Connection error:', event);
+                document.getElementById('status').textContent = 'Error';
+                addMessage('Connection error', 'error');
+            };
+            
+            eventSource.addEventListener('connected', function(event) {
+                console.log('Connected event:', event.data);
+                const data = JSON.parse(event.data);
+                addMessage(`Connected to session: ${data.sessionId}`, 'connected');
+            });
+            
+            eventSource.addEventListener('tool', function(event) {
+                console.log('Tool event:', event.data);
+                const data = JSON.parse(event.data);
+                addMessage(`Tool: ${data.name} (${data.status})`, 'tool');
+            });
+            
+            eventSource.addEventListener('complete', function(event) {
+                console.log('Complete event:', event.data);
+                const data = JSON.parse(event.data);
+                addMessage(`Complete: ${data.content || 'No content'}`, 'complete');
+            });
+            
+            eventSource.addEventListener('error', function(event) {
+                console.log('Error event:', event.data);
+                const data = JSON.parse(event.data);
+                addMessage(`Error: ${data.error}`, 'error');
+            });
+        }
+
+        function disconnect() {
+            if (eventSource) {
+                eventSource.close();
+                eventSource = null;
+                document.getElementById('status').textContent = 'Disconnected';
+                console.log('Disconnected');
+            }
+        }
+
+        function sendMessage() {
+            if (!sessionId) {
+                alert('Please connect first');
+                return;
+            }
+            
+            const message = document.getElementById('messageInput').value;
+            if (!message) {
+                alert('Please enter a message');
+                return;
+            }
+
+            const url = `http://localhost:8088/stream/${sessionId}/message`;
+            
+            fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ content: message })
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Message queued:', data);
+                addMessage(`Sent: ${message}`, 'sent');
+                document.getElementById('messageInput').value = '';
+            })
+            .catch(error => {
+                console.error('Error sending message:', error);
+                addMessage(`Failed to send: ${error.message}`, 'error');
+            });
+        }
+
+        function addMessage(text, type) {
+            const messagesDiv = document.getElementById('messages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `event ${type}`;
+            messageDiv.textContent = `[${new Date().toLocaleTimeString()}] ${text}`;
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        // Handle Enter key in message input
+        document.getElementById('messageInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+    </script>
+</body>
+</html>
