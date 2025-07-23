@@ -199,33 +199,66 @@ func (a *agent) Run(ctx context.Context, sessionID string, content string, attac
 	if !a.provider.Model().SupportsAttachments && attachments != nil {
 		attachments = nil
 	}
-	events := make(chan AgentEvent)
+	events := make(chan AgentEvent, 10) // Buffered channel for better streaming
 
 	genCtx, cancel := context.WithCancel(ctx)
 	if _, loaded := a.activeRequests.LoadOrStore(sessionID, cancel); loaded {
 		cancel() // Clean up unused cancel function
 		return nil, ErrSessionBusy
 	}
+
+	// Subscribe to agent events for real-time streaming
+	subscription := a.Subscribe(genCtx)
+	
 	go func() {
+		defer func() {
+			logging.Debug("Request completed", "sessionID", sessionID)
+			a.activeRequests.Delete(sessionID)
+			cancel()
+			close(events)
+		}()
+		
 		logging.Debug("Request started", "sessionID", sessionID)
 		defer logging.RecoverPanic("agent.Run", func() {
 			events <- a.err(fmt.Errorf("panic while running the agent"))
 		})
+		
 		var attachmentParts []message.ContentPart
 		for _, attachment := range attachments {
 			attachmentParts = append(attachmentParts, message.BinaryContent{Path: attachment.FilePath, MIMEType: attachment.MimeType, Data: attachment.Content})
 		}
+		
 		result := a.processGeneration(genCtx, sessionID, content, attachmentParts)
 		if result.Error != nil && !errors.Is(result.Error, ErrRequestCancelled) && !errors.Is(result.Error, context.Canceled) {
 			logging.Error(result.Error.Error())
+			// Only send error results directly, successful results are sent via pubsub
+			events <- result
 		}
-		logging.Debug("Request completed", "sessionID", sessionID)
-		a.activeRequests.Delete(sessionID)
-		cancel()
-		a.Publish(pubsub.CreatedEvent, result)
-		events <- result
-		close(events)
 	}()
+
+	// Forward intermediate events from subscription to the events channel
+	go func() {
+		defer logging.RecoverPanic("agent.Run-subscription", nil)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case event, ok := <-subscription:
+				if !ok {
+					return
+				}
+				// Only forward events for this specific session
+				if event.Payload.SessionID == sessionID || event.Payload.Message.SessionID == sessionID {
+					select {
+					case events <- event.Payload:
+					case <-ctx.Done():
+						return
+					}
+				}
+			}
+		}
+	}()
+
 	return events, nil
 }
 
@@ -301,11 +334,15 @@ func (a *agent) processGeneration(ctx context.Context, sessionID, content string
 			msgHistory = append(msgHistory, agentMessage, *toolResults)
 			continue
 		}
-		return AgentEvent{
-			Type:    AgentEventTypeResponse,
-			Message: agentMessage,
-			Done:    true,
+		// Publish final completion event
+		finalEvent := AgentEvent{
+			Type:      AgentEventTypeResponse,
+			Message:   agentMessage,
+			SessionID: sessionID,
+			Done:      true,
 		}
+		a.Publish(pubsub.CreatedEvent, finalEvent)
+		return finalEvent
 	}
 }
 
@@ -409,6 +446,13 @@ func (a *agent) streamAndHandleEvents(ctx context.Context, sessionID string, msg
 				Metadata:   toolResult.Metadata,
 				IsError:    toolResult.IsError,
 			}
+			
+			// Publish tool result event for real-time streaming
+			a.Publish(pubsub.CreatedEvent, AgentEvent{
+				Type:      AgentEventTypeResponse,
+				Message:   assistantMsg,
+				SessionID: sessionID,
+			})
 		}
 	}
 out:
@@ -446,12 +490,25 @@ func (a *agent) processEvent(ctx context.Context, sessionID string, assistantMsg
 	switch event.Type {
 	case provider.EventThinkingDelta:
 		assistantMsg.AppendReasoningContent(event.Content)
+		// Publish thinking event for real-time streaming
+		a.Publish(pubsub.CreatedEvent, AgentEvent{
+			Type:      AgentEventTypeResponse,
+			Message:   *assistantMsg,
+			SessionID: sessionID,
+		})
 		return a.messages.Update(ctx, *assistantMsg)
 	case provider.EventContentDelta:
 		assistantMsg.AppendContent(event.Content)
+		// Content delta streaming removed - only final content will be sent
 		return a.messages.Update(ctx, *assistantMsg)
 	case provider.EventToolUseStart:
 		assistantMsg.AddToolCall(*event.ToolCall)
+		// Publish tool start event for real-time streaming
+		a.Publish(pubsub.CreatedEvent, AgentEvent{
+			Type:      AgentEventTypeResponse,
+			Message:   *assistantMsg,
+			SessionID: sessionID,
+		})
 		return a.messages.Update(ctx, *assistantMsg)
 	// TODO: see how to handle this
 	// case provider.EventToolUseDelta:
@@ -464,6 +521,12 @@ func (a *agent) processEvent(ctx context.Context, sessionID string, assistantMsg
 	// 	}
 	case provider.EventToolUseStop:
 		assistantMsg.FinishToolCall(event.ToolCall.ID)
+		// Publish tool completion event for real-time streaming
+		a.Publish(pubsub.CreatedEvent, AgentEvent{
+			Type:      AgentEventTypeResponse,
+			Message:   *assistantMsg,
+			SessionID: sessionID,
+		})
 		return a.messages.Update(ctx, *assistantMsg)
 	case provider.EventError:
 		if errors.Is(event.Error, context.Canceled) {

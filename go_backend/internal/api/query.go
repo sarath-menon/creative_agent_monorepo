@@ -96,6 +96,11 @@ func NewQueryHandler(app *app.App) *QueryHandler {
 	}
 }
 
+// GetApp returns the app instance for external access
+func (h *QueryHandler) GetApp() *app.App {
+	return h.app
+}
+
 // Helper function to get command names for logging
 func getCommandNames(commands map[string]commands.Command) []string {
 	names := make([]string, 0, len(commands))

@@ -16,6 +16,7 @@ import (
 	"go_general_agent/internal/config"
 	"go_general_agent/internal/db"
 	"go_general_agent/internal/format"
+	httphandlers "go_general_agent/internal/http"
 	"go_general_agent/internal/llm/agent"
 	"go_general_agent/internal/logging"
 	"go_general_agent/internal/tui"
@@ -254,6 +255,8 @@ func outputJSONRPCResponse(response *api.QueryResponse, outputFormat string) {
 	fmt.Println(string(jsonBytes))
 }
 
+// SSE handler functions moved to internal/http/sse.go
+
 func startHTTPServer(ctx context.Context, app *app.App, host string, port int) error {
 	handler := api.NewQueryHandler(app)
 
@@ -264,6 +267,11 @@ func startHTTPServer(ctx context.Context, app *app.App, host string, port int) e
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain")
 		fmt.Fprintf(w, "OpenCode HTTP JSON-RPC Server\nPath: %s\nMethod: %s\n", r.URL.Path, r.Method)
+	})
+
+	// Add SSE streaming endpoint
+	mux.HandleFunc("/stream", func(w http.ResponseWriter, r *http.Request) {
+		httphandlers.HandleSSEStream(ctx, handler, w, r)
 	})
 
 	mux.HandleFunc("/rpc", func(w http.ResponseWriter, r *http.Request) {

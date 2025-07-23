@@ -66,3 +66,18 @@ func Connect() (*sql.DB, error) {
 	}
 	return db, nil
 }
+
+// SetupTestDatabase applies migrations to a test database connection
+func SetupTestDatabase(db *sql.DB) error {
+	goose.SetBaseFS(FS)
+
+	if err := goose.SetDialect("sqlite3"); err != nil {
+		return fmt.Errorf("failed to set dialect: %w", err)
+	}
+
+	if err := goose.Up(db, "migrations"); err != nil {
+		return fmt.Errorf("failed to apply migrations: %w", err)
+	}
+	
+	return nil
+}

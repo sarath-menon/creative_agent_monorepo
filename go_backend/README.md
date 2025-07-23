@@ -116,7 +116,9 @@ OpenCode also provides an HTTP JSON-RPC server for web-based integrations:
 
 #### HTTP API Usage
 
-The HTTP server accepts JSON-RPC requests at the `/rpc` endpoint:
+The HTTP server provides two main endpoints:
+
+**JSON-RPC Endpoint (`/rpc`)** - Request/response API:
 
 ```bash
 # Get sessions via HTTP
@@ -134,6 +136,28 @@ curl -X POST http://localhost:8080/rpc \
   -H "Content-Type: application/json" \
   -d '{"method": "messages.send", "params": {"sessionId": "uuid", "content": "Hello"}, "id": 1}'
 ```
+
+**SSE Streaming Endpoint (`/stream`)** - Real-time agent responses:
+
+```bash
+# Stream agent response via GET
+curl -N -H "Accept: text/event-stream" \
+  "http://localhost:8080/stream?sessionId=uuid&content=Hello"
+
+# Stream agent response via POST
+curl -N -H "Accept: text/event-stream" \
+  -H "Content-Type: application/json" \
+  -d '{"sessionId": "uuid", "content": "Hello"}' \
+  http://localhost:8080/stream
+```
+
+**SSE Event Types:**
+- `connected` - Connection established with session ID
+- `tool` - Tool execution events (with status: pending/running/completed)
+- `complete` - Response finished (includes final content)
+- `error` - Error occurred
+
+*Note: Only agent progress (tool executions) streams in real-time. Final content is delivered in the completion event for better performance.*
 
 ### Native Integration Examples
 
@@ -172,6 +196,42 @@ urlRequest.httpBody = try JSONEncoder().encode(request)
 
 let (data, _) = try await URLSession.shared.data(for: urlRequest)
 let sessions = try JSONDecoder().decode([SessionData].self, from: data)
+```
+
+#### JavaScript/Web Integration
+
+**SSE Streaming with EventSource:**
+```javascript
+// Real-time agent progress streaming in web applications
+const sessionId = 'your-session-id';
+const content = 'Hello, can you help me?';
+const url = `http://localhost:8080/stream?sessionId=${sessionId}&content=${encodeURIComponent(content)}`;
+
+const eventSource = new EventSource(url);
+
+eventSource.addEventListener('connected', (event) => {
+    const data = JSON.parse(event.data);
+    console.log('Connected to session:', data.sessionId);
+});
+
+
+eventSource.addEventListener('tool', (event) => {
+    const data = JSON.parse(event.data);
+    console.log(`Tool ${data.name} (${data.status}):`, data.input);
+    // Update UI with tool execution progress
+});
+
+eventSource.addEventListener('complete', (event) => {
+    const data = JSON.parse(event.data);
+    console.log('Response complete:', data.content); // Final content available here
+    eventSource.close();
+});
+
+eventSource.addEventListener('error', (event) => {
+    const data = JSON.parse(event.data);
+    console.error('Error:', data.error);
+    eventSource.close();
+});
 ```
 
 #### Session Management API (2-Way Communication)
