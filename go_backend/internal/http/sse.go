@@ -8,6 +8,7 @@ import (
 	"net/http"
 
 	"go_general_agent/internal/api"
+	"go_general_agent/internal/commands"
 	"go_general_agent/internal/llm/agent"
 )
 
@@ -65,7 +66,14 @@ func HandleSSEStream(ctx context.Context, handler *api.QueryHandler, w http.Resp
 		return
 	}
 
-	// Start agent processing
+	// Check if this is a slash command
+	if commands.IsSlashCommand(content) {
+		// Handle slash command directly
+		handleSlashCommand(streamCtx, handler, w, sessionID, content)
+		return
+	}
+
+	// Start agent processing for regular content
 	events, err := handler.GetApp().CoderAgent.Run(streamCtx, sessionID, content)
 	if err != nil {
 		fmt.Fprintf(w, "event: error\ndata: {\"error\": \"Failed to start agent: %s\"}\n\n", err.Error())
@@ -95,11 +103,23 @@ func HandleSSEStream(ctx context.Context, handler *api.QueryHandler, w http.Resp
 			return
 		case event, ok := <-events:
 			if !ok {
-				// Channel closed, we're done - send proper completion event
+				// Channel closed, we're done - send proper completion event with final content
 				eventData := map[string]interface{}{
 					"type": "complete",
 					"done": true,
 				}
+				
+				// Try to get the final message content from the session
+				if messages, err := handler.GetApp().Messages.List(context.Background(), sessionID); err == nil && len(messages) > 0 {
+					// Get the last message (should be the assistant's response)
+					lastMessage := messages[len(messages)-1]
+					content := lastMessage.Content().String()
+					if lastMessage.Role == "assistant" && content != "" {
+						eventData["content"] = content
+						eventData["messageId"] = lastMessage.ID
+					}
+				}
+				
 				jsonData, _ := json.Marshal(eventData)
 				fmt.Fprintf(w, "event: complete\ndata: %s\n\n", string(jsonData))
 				flusher.Flush()
@@ -189,4 +209,52 @@ func WriteSSEEvent(w http.ResponseWriter, event agent.AgentEvent) error {
 	}
 
 	return nil
+}
+
+// handleSlashCommand processes slash commands directly and sends the response via SSE
+func handleSlashCommand(ctx context.Context, handler *api.QueryHandler, w http.ResponseWriter, sessionID, content string) {
+	// Create a flusher for immediate SSE delivery
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		fmt.Fprintf(w, "event: error\ndata: {\"error\": \"Streaming not supported\"}\n\n")
+		return
+	}
+
+	// Send initial connection event
+	fmt.Fprintf(w, "event: connected\ndata: {\"sessionId\": \"%s\"}\n\n", sessionID)
+	flusher.Flush()
+
+	// Parse the slash command
+	parsedCmd, err := commands.ParseCommand(content)
+	if err != nil {
+		fmt.Fprintf(w, "event: error\ndata: {\"error\": \"Invalid slash command: %s\"}\n\n", err.Error())
+		flusher.Flush()
+		return
+	}
+
+	// Create a command registry and load built-in commands
+	registry := commands.NewRegistry()
+	if err := registry.LoadCommands(); err != nil {
+		fmt.Fprintf(w, "event: error\ndata: {\"error\": \"Failed to load commands: %s\"}\n\n", err.Error())
+		flusher.Flush()
+		return
+	}
+
+	// Execute the command
+	result, err := registry.ExecuteCommand(ctx, parsedCmd.Name, parsedCmd.Arguments)
+	if err != nil {
+		fmt.Fprintf(w, "event: error\ndata: {\"error\": \"Command execution failed: %s\"}\n\n", err.Error())
+		flusher.Flush()
+		return
+	}
+
+	// Send completion event with the command result
+	eventData := map[string]interface{}{
+		"type":    "complete",
+		"content": result,
+		"done":    true,
+	}
+	jsonData, _ := json.Marshal(eventData)
+	fmt.Fprintf(w, "event: complete\ndata: %s\n\n", string(jsonData))
+	flusher.Flush()
 }

@@ -31,6 +31,7 @@ import { type FormEventHandler, useState, useEffect, useRef } from 'react';
 
 import { useSession } from '@/hooks/useSession';
 import { useSendMessage } from '@/hooks/useMessages';
+import { useSSEStream } from '@/hooks/useSSEStream';
 import { LoadingDots } from './loading-dots';
 
 
@@ -67,9 +68,14 @@ export function ChatApp() {
   const [showSlashCommands, setShowSlashCommands] = useState(false);
   const [selectedCommandIndex, setSelectedCommandIndex] = useState(0);
   const [inputElement, setInputElement] = useState<HTMLTextAreaElement | null>(null);
+  
+  // State for current streaming request
+  const [streamingSessionId, setStreamingSessionId] = useState<string>('');
+  const [streamingContent, setStreamingContent] = useState<string>('');
 
   const { data: session, isLoading: sessionLoading, error: sessionError } = useSession();
   const sendMessage = useSendMessage();
+  const sseStream = useSSEStream(streamingSessionId, streamingContent);
 
   const handleTextChange = (value: string) => {
     setText(value);
@@ -128,6 +134,43 @@ export function ChatApp() {
     }
   };
 
+  // Handle completion of streaming
+  useEffect(() => {
+    if (sseStream.completed && sseStream.finalContent) {
+      // Convert SSE tool calls to our Message format
+      const convertedToolCalls: ToolCall[] = sseStream.toolCalls.map(tc => ({
+        name: tc.name,
+        description: tc.description,
+        status: tc.status as AIToolStatus,
+        parameters: tc.parameters,
+        result: tc.result,
+        error: tc.error,
+      }));
+      
+      setMessages(prev => [...prev, { 
+        content: sseStream.finalContent!, 
+        from: 'assistant',
+        toolCalls: convertedToolCalls.length > 0 ? convertedToolCalls : undefined
+      }]);
+      
+      // Clear streaming state
+      setStreamingSessionId('');
+      setStreamingContent('');
+    }
+  }, [sseStream.completed, sseStream.finalContent, sseStream.toolCalls]);
+
+  // Handle streaming errors
+  useEffect(() => {
+    if (sseStream.error) {
+      const errorMessage = `Failed to send prompt: ${sseStream.error}`;
+      setMessages(prev => [...prev, { content: errorMessage, from: 'assistant' }]);
+      
+      // Clear streaming state
+      setStreamingSessionId('');
+      setStreamingContent('');
+    }
+  }, [sseStream.error]);
+
   const handleSubmit: FormEventHandler<HTMLFormElement> = async (event) => {
     event.preventDefault();
     if (!text || !session?.id) {
@@ -140,18 +183,9 @@ export function ChatApp() {
     setMessages(prev => [...prev, { content: messageText, from: 'user' }]);
     setText('');
     
-    sendMessage.mutate(
-      { content: messageText, sessionId: session.id },
-      {
-        onSuccess: (data) => {
-          setMessages(prev => [...prev, { content: data.response, from: 'assistant' }]);
-        },
-        onError: (error) => {
-          const errorMessage = `Failed to send prompt: ${error}`;
-          setMessages(prev => [...prev, { content: errorMessage, from: 'assistant' }]);
-        }
-      }
-    );
+    // Start SSE streaming
+    setStreamingSessionId(session.id);
+    setStreamingContent(messageText);
   };
 
   return (
@@ -162,7 +196,11 @@ export function ChatApp() {
           {messages.map((message, index) => (
             <AIMessage from={message.from} key={index}>
               <AIMessageContent >
-                {message.content}
+                {message.from === 'assistant' ? (
+                  <AIResponse>{message.content}</AIResponse>
+                ) : (
+                  message.content
+                )}
                 {message.toolCalls?.map((toolCall, toolIndex) => (
                   <AITool
                   className='mt-2'
@@ -186,10 +224,36 @@ export function ChatApp() {
               </AIMessageContent>
             </AIMessage>
           ))}
-          {sendMessage.isPending && (
+          {(sseStream.connecting || sseStream.connected) && (
             <AIMessage from="assistant">
               <AIMessageContent>
-                <LoadingDots />
+                {sseStream.toolCalls.length > 0 ? (
+                  <>
+                    {sseStream.toolCalls.map((toolCall, toolIndex) => (
+                      <AITool
+                        className='mt-2'
+                        key={`streaming-${toolCall.id}-${toolIndex}`}>
+                        <AIToolHeader
+                          description={toolCall.description}
+                          name={toolCall.name}
+                          status={toolCall.status}
+                        />
+                        <AIToolContent>
+                          <AIToolParameters parameters={toolCall.parameters} />
+                          {(toolCall.result || toolCall.error) && (
+                            <AIToolResult
+                              error={toolCall.error}
+                              result={toolCall.result ? <AIResponse>{toolCall.result}</AIResponse> : undefined}
+                            />
+                          )}
+                        </AIToolContent>
+                      </AITool>
+                    ))}
+                    {!sseStream.completed && <LoadingDots />}
+                  </>
+                ) : (
+                  <LoadingDots />
+                )}
               </AIMessageContent>
             </AIMessage>
           )}
@@ -230,7 +294,7 @@ export function ChatApp() {
             <AIInputSubmit 
 
               disabled={!text || !session?.id || sessionLoading} 
-              status={sendMessage.isPending ? 'streaming' : sendMessage.isError ? 'error' : 'ready'} 
+              status={(sseStream.connecting || sseStream.connected) ? 'streaming' : sseStream.error ? 'error' : 'ready'} 
             />
           </AIInputToolbar>
         </AIInput>
