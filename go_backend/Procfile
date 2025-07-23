@@ -1,4 +1,0 @@
-backend: air
-frontend: fswatch -o rereate_macos_app/rereate_macos_app/ | xargs -n1 -I{} sh -c 'cd rereate_macos_app && echo "Building macOS app..." && xcodebuild -project rereate_macos_app.xcodeproj -scheme rereate_macos_app build && echo "Launching app..." && open /Users/sarathmenon/Library/Developer/Xcode/DerivedData/rereate_macos_app-gtajvuzsgkolzqdycifbqtoiaztp/Build/Products/Debug/rereate_macos_app.app'
-
-

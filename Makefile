@@ -2,8 +2,8 @@
 
 # Variables
 BINARY_NAME=go_general_agent
-BUILD_DIR=build
-MAIN_PATH=./main.go
+BUILD_DIR=go_backend/build
+MAIN_PATH=./go_backend/main.go
 
 # Default target
 help:

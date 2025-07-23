@@ -22,7 +22,7 @@ make tail-log     # Reads the current log file (last 100 lines of code)
 ## Architecture
 
 1. Backend - Go
-2. Frontend - Swif macos app
+2. Frontend - Tauri 2.0 app withh react
 
 ## Code style
 
