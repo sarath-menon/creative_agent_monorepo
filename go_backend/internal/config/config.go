@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"go_general_agent/internal/llm/models"
 	"go_general_agent/internal/logging"
@@ -40,6 +41,7 @@ type AgentName string
 
 const (
 	AgentMain AgentName = "main" // Single main agent for embedded use
+	AgentSub  AgentName = "sub"  // Sub-agent for tool dispatch tasks
 )
 
 // Agent defines configuration for different LLM models and their token limits.
@@ -92,6 +94,8 @@ const (
 
 // Global configuration instance
 var cfg *Config
+// Mutex to protect concurrent access to cfg
+var cfgMutex sync.RWMutex
 
 // Load initializes the configuration from environment variables and config files.
 // If debug is true, debug mode is enabled and log level is set to debug.
@@ -178,14 +182,31 @@ func Load(workingDir string, debug bool) (*Config, error) {
 	}
 
 	// Set default for main agent if not configured
-	if cfg.Agents == nil {
-		cfg.Agents = make(map[AgentName]Agent)
-	}
-	if _, exists := cfg.Agents[AgentMain]; !exists {
+	cfgMutex.RLock()
+	_, exists := cfg.Agents[AgentMain]
+	cfgMutex.RUnlock()
+	if !exists {
+		cfgMutex.Lock()
 		cfg.Agents[AgentMain] = Agent{
 			Model:     models.Claude4Sonnet, // Default fallback
 			MaxTokens: 4096,
 		}
+		cfgMutex.Unlock()
+	}
+	
+	// Set default for sub-agent if not configured (uses same model as main but lower token limit)
+	cfgMutex.RLock()
+	_, existsSub := cfg.Agents[AgentSub]
+	mainAgent := cfg.Agents[AgentMain] // Get main agent config while we have the read lock
+	cfgMutex.RUnlock()
+	if !existsSub {
+		cfgMutex.Lock()
+		cfg.Agents[AgentSub] = Agent{
+			Model:           mainAgent.Model, // Use same model as main agent
+			MaxTokens:       2048,            // Lower token limit for sub-agent tasks
+			ReasoningEffort: mainAgent.ReasoningEffort,
+		}
+		cfgMutex.Unlock()
 	}
 	return cfg, nil
 }
@@ -440,13 +461,17 @@ func validateAgent(cfg *Config, name AgentName, agent Agent) error {
 			"max_tokens", agent.MaxTokens)
 
 		// Update the agent with default max tokens
+		cfgMutex.RLock()
 		updatedAgent := cfg.Agents[name]
+		cfgMutex.RUnlock()
 		if model.DefaultMaxTokens > 0 {
 			updatedAgent.MaxTokens = model.DefaultMaxTokens
 		} else {
 			updatedAgent.MaxTokens = MaxTokensFallbackDefault
 		}
+		cfgMutex.Lock()
 		cfg.Agents[name] = updatedAgent
+		cfgMutex.Unlock()
 	} else if model.ContextWindow > 0 && agent.MaxTokens > model.ContextWindow/2 {
 		// Ensure max tokens doesn't exceed half the context window (reasonable limit)
 		logging.Warn("max tokens exceeds half the context window, adjusting",
@@ -456,9 +481,13 @@ func validateAgent(cfg *Config, name AgentName, agent Agent) error {
 			"context_window", model.ContextWindow)
 
 		// Update the agent with adjusted max tokens
+		cfgMutex.RLock()
 		updatedAgent := cfg.Agents[name]
+		cfgMutex.RUnlock()
 		updatedAgent.MaxTokens = model.ContextWindow / 2
+		cfgMutex.Lock()
 		cfg.Agents[name] = updatedAgent
+		cfgMutex.Unlock()
 	}
 
 	// Validate reasoning effort for models that support reasoning
@@ -470,9 +499,13 @@ func validateAgent(cfg *Config, name AgentName, agent Agent) error {
 				"model", agent.Model)
 
 			// Update the agent with default reasoning effort
+			cfgMutex.RLock()
 			updatedAgent := cfg.Agents[name]
+			cfgMutex.RUnlock()
 			updatedAgent.ReasoningEffort = "medium"
+			cfgMutex.Lock()
 			cfg.Agents[name] = updatedAgent
+			cfgMutex.Unlock()
 		} else {
 			// Check if reasoning effort is valid (low, medium, high)
 			effort := strings.ToLower(agent.ReasoningEffort)
@@ -483,9 +516,13 @@ func validateAgent(cfg *Config, name AgentName, agent Agent) error {
 					"reasoning_effort", agent.ReasoningEffort)
 
 				// Update the agent with valid reasoning effort
+				cfgMutex.RLock()
 				updatedAgent := cfg.Agents[name]
+				cfgMutex.RUnlock()
 				updatedAgent.ReasoningEffort = "medium"
+				cfgMutex.Lock()
 				cfg.Agents[name] = updatedAgent
+				cfgMutex.Unlock()
 			}
 		}
 	} else if !model.CanReason && agent.ReasoningEffort != "" {
@@ -496,9 +533,13 @@ func validateAgent(cfg *Config, name AgentName, agent Agent) error {
 			"reasoning_effort", agent.ReasoningEffort)
 
 		// Update the agent to remove reasoning effort
+		cfgMutex.RLock()
 		updatedAgent := cfg.Agents[name]
+		cfgMutex.RUnlock()
 		updatedAgent.ReasoningEffort = ""
+		cfgMutex.Lock()
 		cfg.Agents[name] = updatedAgent
+		cfgMutex.Unlock()
 	}
 
 	return nil
@@ -559,72 +600,94 @@ func getProviderAPIKey(provider models.ModelProvider) string {
 	return ""
 }
 
-// setDefaultModelForAgent sets a default model for the main agent based on available providers
+// setDefaultModelForAgent sets a default model for agents based on available providers
 func setDefaultModelForAgent(agent AgentName) bool {
+	// Set token limit based on agent type
+	maxTokens := int64(4096)
+	if agent == AgentSub {
+		maxTokens = 2048 // Lower token limit for sub-agents
+	}
+	
 	// Check providers in order of preference
 	if apiKey := os.Getenv("ANTHROPIC_API_KEY"); apiKey != "" {
+		cfgMutex.Lock()
 		cfg.Agents[agent] = Agent{
 			Model:     models.Claude4Sonnet,
-			MaxTokens: 4096,
+			MaxTokens: maxTokens,
 		}
+		cfgMutex.Unlock()
 		return true
 	}
 
 	if apiKey := os.Getenv("OPENAI_API_KEY"); apiKey != "" {
+		cfgMutex.Lock()
 		cfg.Agents[agent] = Agent{
 			Model:           models.GPT41,
-			MaxTokens:       4096,
+			MaxTokens:       maxTokens,
 			ReasoningEffort: "medium",
 		}
+		cfgMutex.Unlock()
 		return true
 	}
 
 	if apiKey := os.Getenv("GEMINI_API_KEY"); apiKey != "" {
+		cfgMutex.Lock()
 		cfg.Agents[agent] = Agent{
 			Model:     models.Gemini25Flash,
-			MaxTokens: 4096,
+			MaxTokens: maxTokens,
 		}
+		cfgMutex.Unlock()
 		return true
 	}
 
 	if apiKey := os.Getenv("GROQ_API_KEY"); apiKey != "" {
+		cfgMutex.Lock()
 		cfg.Agents[agent] = Agent{
 			Model:     models.QWENQwq,
-			MaxTokens: 4096,
+			MaxTokens: maxTokens,
 		}
+		cfgMutex.Unlock()
 		return true
 	}
 
 	if apiKey := os.Getenv("OPENROUTER_API_KEY"); apiKey != "" {
+		cfgMutex.Lock()
 		cfg.Agents[agent] = Agent{
 			Model:     models.OpenRouterClaude37Sonnet,
-			MaxTokens: 4096,
+			MaxTokens: maxTokens,
 		}
+		cfgMutex.Unlock()
 		return true
 	}
 
 	if hasAWSCredentials() {
+		cfgMutex.Lock()
 		cfg.Agents[agent] = Agent{
 			Model:     models.BedrockClaude37Sonnet,
-			MaxTokens: 4096,
+			MaxTokens: maxTokens,
 		}
+		cfgMutex.Unlock()
 		return true
 	}
 
 	if os.Getenv("AZURE_OPENAI_ENDPOINT") != "" {
+		cfgMutex.Lock()
 		cfg.Agents[agent] = Agent{
 			Model:           models.AzureGPT41Mini,
-			MaxTokens:       4096,
+			MaxTokens:       maxTokens,
 			ReasoningEffort: "medium",
 		}
+		cfgMutex.Unlock()
 		return true
 	}
 
 	if hasVertexAICredentials() {
+		cfgMutex.Lock()
 		cfg.Agents[agent] = Agent{
 			Model:     models.VertexAIGemini25,
-			MaxTokens: 4096,
+			MaxTokens: maxTokens,
 		}
+		cfgMutex.Unlock()
 		return true
 	}
 
@@ -696,7 +759,9 @@ func UpdateAgentModel(agentName AgentName, modelID models.ModelID) error {
 		panic("config not loaded")
 	}
 
+	cfgMutex.RLock()
 	existingAgentCfg := cfg.Agents[agentName]
+	cfgMutex.RUnlock()
 
 	model, ok := models.SupportedModels[modelID]
 	if !ok {
@@ -713,11 +778,15 @@ func UpdateAgentModel(agentName AgentName, modelID models.ModelID) error {
 		MaxTokens:       maxTokens,
 		ReasoningEffort: existingAgentCfg.ReasoningEffort,
 	}
+	cfgMutex.Lock()
 	cfg.Agents[agentName] = newAgentCfg
+	cfgMutex.Unlock()
 
 	if err := validateAgent(cfg, agentName, newAgentCfg); err != nil {
 		// revert config update on failure
+		cfgMutex.Lock()
 		cfg.Agents[agentName] = existingAgentCfg
+		cfgMutex.Unlock()
 		return fmt.Errorf("failed to update agent model: %w", err)
 	}
 

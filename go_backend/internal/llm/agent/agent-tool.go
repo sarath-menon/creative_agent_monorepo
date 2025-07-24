@@ -27,7 +27,7 @@ type AgentParams struct {
 func (b *agentTool) Info() tools.ToolInfo {
 	return tools.ToolInfo{
 		Name:        AgentToolName,
-		Description: "Launch a new agent that has access to the following tools: GlobTool, GrepTool, LS, View. When you are searching for a keyword or file and are not confident that you will find the right match on the first try, use the Agent tool to perform the search for you. For example:\n\n- If you are searching for a keyword like \"config\" or \"logger\", or for questions like \"which file does X?\", the Agent tool is strongly recommended\n- If you want to read a specific file path, use the View or GlobTool tool instead of the Agent tool, to find the match more quickly\n- If you are searching for a specific class definition like \"class Foo\", use the GlobTool tool instead, to find the match more quickly\n\nUsage notes:\n1. Launch multiple agents concurrently whenever possible, to maximize performance; to do that, use a single message with multiple tool uses\n2. When the agent is done, it will return a single message back to you. The result returned by the agent is not visible to the user. To show the user the result, you should send a text message back to the user with a concise summary of the result.\n3. Each agent invocation is stateless. You will not be able to send additional messages to the agent, nor will the agent be able to communicate with you outside of its final report. Therefore, your prompt should contain a highly detailed task description for the agent to perform autonomously and you should specify exactly what information the agent should return back to you in its final and only message to you.\n4. The agent's outputs should generally be trusted\n5. IMPORTANT: The agent can not use Bash, Replace, Edit, so can not modify files. If you want to use these tools, use them directly instead of going through the agent.",
+		Description: tools.LoadToolDescription("agent_tool"),
 		Parameters: map[string]any{
 			"prompt": map[string]any{
 				"type":        "string",
@@ -52,7 +52,7 @@ func (b *agentTool) Run(ctx context.Context, call tools.ToolCall) (tools.ToolRes
 		return tools.ToolResponse{}, fmt.Errorf("session_id and message_id are required")
 	}
 
-	agent, err := NewAgent(config.AgentMain, b.sessions, b.messages, TaskAgentTools())
+	agent, err := NewAgent(config.AgentSub, b.sessions, b.messages, TaskAgentTools())
 	if err != nil {
 		return tools.ToolResponse{}, fmt.Errorf("error creating agent: %s", err)
 	}
@@ -66,15 +66,46 @@ func (b *agentTool) Run(ctx context.Context, call tools.ToolCall) (tools.ToolRes
 	if err != nil {
 		return tools.ToolResponse{}, fmt.Errorf("error generating agent: %s", err)
 	}
-	result := <-done
-	if result.Error != nil {
-		return tools.ToolResponse{}, fmt.Errorf("error generating agent: %s", result.Error)
+
+	// Wait for the final message with end_turn finish reason
+	var finalResult AgentEvent
+	for result := range done {
+		if result.Error != nil {
+			return tools.ToolResponse{}, fmt.Errorf("error generating agent: %s", result.Error)
+		}
+
+		// Check if this is the final message
+		if result.Message.FinishReason() == message.FinishReasonEndTurn {
+			finalResult = result
+			break
+		}
+
+		// Continue processing intermediate messages (like tool_use)
 	}
 
-	response := result.Message
+	// Verify we got a final result
+	if finalResult.Message.Role == "" {
+		return tools.ToolResponse{}, fmt.Errorf("no final message received from sub-agent")
+	}
+
+	response := finalResult.Message
 	if response.Role != message.Assistant {
 		return tools.NewTextErrorResponse("no response"), nil
 	}
+
+	// Get content from the final response
+	content := response.Content().String()
+
+	// Log the final output returned by the sub-agent
+	previewLen := 100
+	if len(content) < previewLen {
+		previewLen = len(content)
+	}
+	preview := content
+	if len(content) > previewLen {
+		preview = content[:previewLen] + "..."
+	}
+	fmt.Printf("[AGENT TOOL] Sub-agent returned %d characters: %q\n", len(content), preview)
 
 	updatedSession, err := b.sessions.Get(ctx, session.ID)
 	if err != nil {
@@ -91,7 +122,7 @@ func (b *agentTool) Run(ctx context.Context, call tools.ToolCall) (tools.ToolRes
 	if err != nil {
 		return tools.ToolResponse{}, fmt.Errorf("error saving parent session: %s", err)
 	}
-	return tools.NewTextResponse(response.Content().String()), nil
+	return tools.NewTextResponse(content), nil
 }
 
 func NewAgentTool(

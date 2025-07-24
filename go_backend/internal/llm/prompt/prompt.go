@@ -13,17 +13,25 @@ import (
 )
 
 func GetAgentPrompt(agentName config.AgentName, provider models.ModelProvider) string {
-	// Load prompt with standard environment variables
-	basePrompt := LoadPromptWithStandardVars("coder", nil)
-
-	if agentName == config.AgentMain {
-		// Add context from project-specific instruction files if they exist
-		contextContent := getContextFromPaths()
-		logging.Debug("Context content", "Context", contextContent)
-		if contextContent != "" {
-			return fmt.Sprintf("%s\n\n# Project-Specific Context\n Make sure to follow the instructions in the context below\n%s", basePrompt, contextContent)
+	var basePrompt string
+	
+	if agentName == config.AgentSub {
+		// Load task agent system prompt
+		basePrompt = LoadPromptWithStandardVars("task_agent", nil)
+	} else {
+		// Load main agent prompt with standard environment variables
+		basePrompt = LoadPromptWithStandardVars("coder", nil)
+		
+		if agentName == config.AgentMain {
+			// Add context from project-specific instruction files if they exist
+			contextContent := getContextFromPaths()
+			logging.Debug("Context content", "Context", contextContent)
+			if contextContent != "" {
+				return fmt.Sprintf("%s\n\n# Project-Specific Context\n Make sure to follow the instructions in the context below\n%s", basePrompt, contextContent)
+			}
 		}
 	}
+	
 	return basePrompt
 }
 
