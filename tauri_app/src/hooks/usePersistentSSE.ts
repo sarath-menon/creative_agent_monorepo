@@ -42,6 +42,7 @@ export function usePersistentSSE(sessionId: string): PersistentSSEHook {
   const eventSourceRef = useRef<EventSource | null>(null);
   const toolCallsRef = useRef<Map<string, SSEToolCall>>(new Map());
   const currentSessionRef = useRef<string>('');
+  const connectedRef = useRef<boolean>(false);
 
   // Establish persistent connection when sessionId changes
   useEffect(() => {
@@ -193,9 +194,26 @@ export function usePersistentSSE(sessionId: string): PersistentSSEHook {
     };
   }, [sessionId]);
 
+  // Cleanup on component unmount
+  useEffect(() => {
+    return () => {
+      console.log('Component unmounting - cleaning up persistent SSE connection');
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+      }
+      currentSessionRef.current = '';
+    };
+  }, []);
+
+  // Update connectedRef when state.connected changes
+  useEffect(() => {
+    connectedRef.current = state.connected;
+  }, [state.connected]);
+
   // Function to send messages via POST to message queue
   const sendMessage = useCallback(async (content: string) => {
-    if (!sessionId || !state.connected) {
+    if (!sessionId || !connectedRef.current) {
       throw new Error('No active SSE connection');
     }
 
@@ -237,11 +255,11 @@ export function usePersistentSSE(sessionId: string): PersistentSSEHook {
       }));
       throw error;
     }
-  }, [sessionId, state.connected]);
+  }, [sessionId]);
 
   // Function to pause message processing
   const pauseMessage = useCallback(async () => {
-    if (!sessionId || !state.connected) {
+    if (!sessionId || !connectedRef.current) {
       throw new Error('No active SSE connection');
     }
 
@@ -273,11 +291,11 @@ export function usePersistentSSE(sessionId: string): PersistentSSEHook {
       }));
       throw error;
     }
-  }, [sessionId, state.connected]);
+  }, [sessionId]);
 
   // Function to resume message processing
   const resumeMessage = useCallback(async () => {
-    if (!sessionId || !state.connected) {
+    if (!sessionId || !connectedRef.current) {
       throw new Error('No active SSE connection');
     }
 
@@ -309,7 +327,7 @@ export function usePersistentSSE(sessionId: string): PersistentSSEHook {
       }));
       throw error;
     }
-  }, [sessionId, state.connected]);
+  }, [sessionId]);
 
   return {
     ...state,

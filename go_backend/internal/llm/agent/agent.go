@@ -315,7 +315,6 @@ func (a *agent) processGeneration(ctx context.Context, sessionID, content string
 		default:
 			// Continue processing
 		}
-		logging.Info("[Agent] Starting LLM stream processing for session %s\n", sessionID)
 		agentMessage, toolResults, err := a.streamAndHandleEvents(ctx, sessionID, msgHistory)
 		if err != nil {
 			logging.Info("[Agent] Stream processing failed for session %s: %v\n", sessionID, err)
@@ -388,7 +387,6 @@ func (a *agent) streamAndHandleEvents(ctx context.Context, sessionID string, msg
 	ctx = context.WithValue(ctx, tools.MessageIDContextKey, assistantMsg.ID)
 
 	// Process each event in the stream.
-	logging.Info("[Agent] Processing LLM stream events for session %s\n", sessionID)
 	for event := range eventChan {
 		if processErr := a.processEvent(ctx, sessionID, &assistantMsg, event); processErr != nil {
 			a.finishMessage(ctx, &assistantMsg, message.FinishReasonCanceled)

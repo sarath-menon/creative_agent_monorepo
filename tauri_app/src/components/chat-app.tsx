@@ -46,6 +46,7 @@ const slashCommands = [
   { id: 'help', name: 'help', description: 'Get assistance and guidance', icon: HelpCircle },
   { id: 'mcp', name: 'mcp', description: 'Model Context Protocol', icon: Command },
   { id: 'session', name: 'session', description: 'User Session Management', icon: Command },
+  { id: 'tools', name: 'tools', description: 'Tools available to the agent', icon: Command },
 ];
 
 type ToolCall = {
