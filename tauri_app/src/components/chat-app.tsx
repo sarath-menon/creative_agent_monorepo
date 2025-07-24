@@ -24,6 +24,8 @@ import {
   AIToolHeader,
   AIToolParameters,
   AIToolResult,
+  AIToolLadder,
+  AIToolStep,
   type AIToolStatus,
 } from '@/components/ui/kibo-ui/ai/tool';
 import { GlobeIcon, MicIcon, PlusIcon, Play, Square, Command, HelpCircle } from 'lucide-react';
@@ -193,38 +195,15 @@ export function ChatApp() {
                 ) : (
                   message.content
                 )}
-                {message.toolCalls?.map((toolCall, toolIndex) => (
-                  <AITool
-                  className='mt-2'
-                  key={`${index}-${toolCall.name}-${toolIndex}`}>
-                    <AIToolHeader
-                      description={toolCall.description}
-                      name={toolCall.name}
-                      status={toolCall.status}
-                    />
-                    <AIToolContent>
-                      <AIToolParameters parameters={toolCall.parameters} />
-                      {(toolCall.result || toolCall.error) && (
-                        <AIToolResult
-                          error={toolCall.error}
-                          result={toolCall.result ? <AIResponse>{toolCall.result}</AIResponse> : undefined}
-                        />
-                      )}
-                    </AIToolContent>
-                  </AITool>
-                ))}
-              </AIMessageContent>
-            </AIMessage>
-          ))}
-          {sseStream.processing && (
-            <AIMessage from="assistant">
-              <AIMessageContent>
-                {sseStream.toolCalls.length > 0 ? (
-                  <>
-                    {sseStream.toolCalls.map((toolCall, toolIndex) => (
-                      <AITool
-                        className='mt-2'
-                        key={`streaming-${toolCall.id}-${toolIndex}`}>
+                {message.toolCalls && message.toolCalls.length > 0 && (
+                  <AIToolLadder className="mt-4">
+                    {message.toolCalls.map((toolCall, toolIndex) => (
+                      <AIToolStep
+                        key={`${index}-${toolCall.name}-${toolIndex}`}
+                        status={toolCall.status}
+                        stepNumber={toolIndex + 1}
+                        isLast={toolIndex === message.toolCalls!.length - 1}
+                      >
                         <AIToolHeader
                           description={toolCall.description}
                           name={toolCall.name}
@@ -239,8 +218,43 @@ export function ChatApp() {
                             />
                           )}
                         </AIToolContent>
-                      </AITool>
+                      </AIToolStep>
                     ))}
+                  </AIToolLadder>
+                )}
+              </AIMessageContent>
+            </AIMessage>
+          ))}
+          {sseStream.processing && (
+            <AIMessage from="assistant">
+              <AIMessageContent>
+                {sseStream.toolCalls.length > 0 ? (
+                  <>
+                    <AIToolLadder className="mt-4">
+                      {sseStream.toolCalls.map((toolCall, toolIndex) => (
+                        <AIToolStep
+                          key={`streaming-${toolCall.id}-${toolIndex}`}
+                          status={toolCall.status}
+                          stepNumber={toolIndex + 1}
+                          isLast={toolIndex === sseStream.toolCalls.length - 1}
+                        >
+                          <AIToolHeader
+                            description={toolCall.description}
+                            name={toolCall.name}
+                            status={toolCall.status}
+                          />
+                          <AIToolContent>
+                            <AIToolParameters parameters={toolCall.parameters} />
+                            {(toolCall.result || toolCall.error) && (
+                              <AIToolResult
+                                error={toolCall.error}
+                                result={toolCall.result ? <AIResponse>{toolCall.result}</AIResponse> : undefined}
+                              />
+                            )}
+                          </AIToolContent>
+                        </AIToolStep>
+                      ))}
+                    </AIToolLadder>
                     {!sseStream.completed && <LoadingDots />}
                   </>
                 ) : (

@@ -77,13 +77,9 @@ export const AIToolHeader = ({
     )}
     {...props}
   >
-    <div className="flex items-center justify-between flex-1">
-
-      <div className="flex items-center gap-2">
+    <div className="flex items-center gap-2">
       <WrenchIcon className="size-3 text-muted-foreground" />
       <span className="font-medium text-xs">{name}</span>
-      </div>
-      {getStatusBadge(status)}
     </div>
     <ChevronDownIcon className="size-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
   </CollapsibleTrigger>
@@ -93,7 +89,7 @@ export type AIToolContentProps = ComponentProps<typeof CollapsibleContent>;
 
 export const AIToolContent = ({ className, ...props }: AIToolContentProps) => (
   <CollapsibleContent
-    className={cn('grid gap-4 overflow-hidden border-t p-4 text-sm', className)}
+    className={cn('grid gap-4 overflow-x-auto border-t p-4 text-sm', className)}
     {...props}
   />
 );
@@ -108,11 +104,9 @@ export const AIToolParameters = ({
   ...props
 }: AIToolParametersProps) => (
   <div className={cn('space-y-2', className)} {...props}>
-    <h4 className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
-      Parameters
-    </h4>
-    <div className="rounded-md bg-muted/50 p-3">
-      <pre className="overflow-x-auto text-muted-foreground text-xs">
+
+    <div className="rounded-md bg-muted/50">
+      <pre className="overflow-x-scroll whitespace-pre text-muted-foreground text-xs">
         {JSON.stringify(parameters, null, 2)}
       </pre>
     </div>
@@ -141,7 +135,7 @@ export const AIToolResult = ({
       </h4>
       <div
         className={cn(
-          'overflow-x-auto rounded-md p-3 text-xs',
+          'overflow-x-scroll whitespace-pre-wrap rounded-md p-3 text-xs',
           error
             ? 'bg-destructive/10 text-destructive'
             : 'bg-muted/50 text-foreground'
@@ -152,3 +146,62 @@ export const AIToolResult = ({
     </div>
   );
 };
+
+// Ladder View Components
+export type AIToolLadderProps = ComponentProps<'div'>;
+
+export const AIToolLadder = ({ className, children, ...props }: AIToolLadderProps) => (
+  <div className={cn('relative space-y-0', className)} {...props}>
+    {children}
+  </div>
+);
+
+export type AIToolStepProps = ComponentProps<typeof Collapsible> & {
+  status?: AIToolStatus;
+  stepNumber: number;
+  isLast?: boolean;
+};
+
+export const AIToolStep = ({
+  className,
+  status = 'pending',
+  stepNumber,
+  isLast = false,
+  children,
+  ...props
+}: AIToolStepProps) => (
+  <div className="relative">
+    {/* Connection line to next step */}
+    {!isLast && (
+      <div className="absolute left-6 top-12 w-px h-4 bg-border" />
+    )}
+    
+    <div className="flex items-center gap-3">
+      {/* Step indicator */}
+
+        <div className={cn(
+          "size-4 rounded-full  flex items-center justify-center text-xs font-medium",
+          status === 'completed' && "text-green-700",
+          status === 'running' && "text-blue-700 animate-pulse",
+          status === 'error' && " text-red-700",
+          status === 'pending' && " text-muted-foreground"
+        )}>
+          {status === 'completed' && <CheckCircleIcon className="" />}
+          {status === 'error' && <XCircleIcon className="" />}
+          {status === 'running' && <ClockIcon className="" />}
+          {status === 'pending' && stepNumber}
+        </div>
+
+      
+      {/* Tool content */}
+      <div className="flex-1 min-w-0">
+        <Collapsible
+          className={cn('not-prose w-full rounded-md border', className)}
+          {...props}
+        >
+          {children}
+        </Collapsible>
+      </div>
+    </div>
+  </div>
+);
