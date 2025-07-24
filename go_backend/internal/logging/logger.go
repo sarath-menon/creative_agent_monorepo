@@ -21,14 +21,11 @@ func getCaller() string {
 	return caller
 }
 func Info(msg string, args ...any) {
-	source := getCaller()
-	slog.Info(msg, append([]any{"source", source}, args...)...)
+	slog.Info(msg, args...)
 }
 
 func Debug(msg string, args ...any) {
-	// slog.Debug(msg, args...)
-	source := getCaller()
-	slog.Debug(msg, append([]any{"source", source}, args...)...)
+	slog.Debug(msg, args...)
 }
 
 func Warn(msg string, args ...any) {

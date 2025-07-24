@@ -234,14 +234,14 @@ export default { flushLogs };
               }
 
               // Add extra data if available
-              if (log.extra && log.extra.length > 0) {
-                message +=
-                  "\n    Extra data: " +
-                  JSON.stringify(log.extra, null, 2)
-                    .split("\n")
-                    .map((line) => `    ${line}`)
-                    .join("\n");
-              }
+              // if (log.extra && log.extra.length > 0) {
+              //   message +=
+              //     "\n    Extra data: " +
+              //     JSON.stringify(log.extra, null, 2)
+              //       .split("\n")
+              //       .map((line) => `    ${line}`)
+              //       .join("\n");
+              // }
 
               // Use Vite's logger for consistent formatting
               const logOptions = { timestamp: true };

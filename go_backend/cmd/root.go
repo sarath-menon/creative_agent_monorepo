@@ -331,17 +331,17 @@ func startHTTPServer(ctx context.Context, app *app.App, host string, port int) e
 		}
 
 		// Log the incoming request
-		fmt.Printf("HTTP Request: method=%s\n", request.Method)
-		fmt.Printf("HTTP Request Body: %s\n", string(body))
+		logging.Debug("HTTP Request: method=%s\n", request.Method)
+		logging.Debug("HTTP Request Body: %s\n", string(body))
 
 		// Handle the request
 		response := handler.Handle(ctx, &request)
 
 		// Log the response
 		if responseJSON, err := json.Marshal(response); err == nil {
-			fmt.Printf("HTTP Response: %s\n", string(responseJSON))
+			logging.Debug("HTTP Response: %s\n", string(responseJSON))
 		} else {
-			fmt.Printf("HTTP Response: failed to marshal response: %v\n", err)
+			logging.Debug("HTTP Response: failed to marshal response: %v\n", err)
 		}
 
 		// Send response
@@ -350,24 +350,27 @@ func startHTTPServer(ctx context.Context, app *app.App, host string, port int) e
 
 	addr := host + ":" + strconv.Itoa(port)
 	server := &http.Server{
-		Addr:    addr,
-		Handler: mux,
+		Addr:         addr,
+		Handler:      mux,
+		ReadTimeout:  5 * time.Minute,
+		WriteTimeout: 10 * time.Minute,
+		IdleTimeout:  15 * time.Minute, // Prevent 60-second drops
 	}
 
 	// Immediate feedback to user
-	fmt.Printf("Starting HTTP JSON-RPC server on %s...\n", addr)
+	logging.Info("Starting HTTP JSON-RPC server on %s...\n", addr)
 
 	// Handle graceful shutdown
 	go func() {
 		<-ctx.Done()
-		fmt.Printf("\nShutting down HTTP server...\n")
+		logging.Info("\nShutting down HTTP server...\n")
 		server.Shutdown(context.Background())
 	}()
 
 	// Start server and provide ready confirmation
-	fmt.Printf("HTTP JSON-RPC server ready on %s\n", addr)
-	fmt.Printf("Send JSON-RPC requests to: http://%s/rpc\n", addr)
-	fmt.Printf("Press Ctrl+C to stop\n\n")
+	logging.Info("HTTP JSON-RPC server ready on %s\n", addr)
+	logging.Info("Send JSON-RPC requests to: http://%s/rpc\n", addr)
+	logging.Info("Press Ctrl+C to stop\n\n")
 
 	// Start server and block (this will block until server shuts down)
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {

@@ -26,12 +26,25 @@ func getOrCreateMessageQueue(sessionID string) chan string {
 	defer queuesMutex.Unlock()
 	
 	if queue, exists := sessionQueues[sessionID]; exists {
+		fmt.Printf("[SSE Queue] Retrieved existing queue for session %s. Total active sessions: %d\n", sessionID, len(sessionQueues))
 		return queue
 	}
 	
 	queue := make(chan string, 100) // Buffered channel for message queue
 	sessionQueues[sessionID] = queue
+	fmt.Printf("[SSE Queue] Created new queue for session %s. Total active sessions: %d\n", sessionID, len(sessionQueues))
 	return queue
+}
+
+// getQueueLength safely returns the current length of a session's queue
+func getQueueLength(sessionID string) int {
+	queuesMutex.RLock()
+	defer queuesMutex.RUnlock()
+	
+	if queue, exists := sessionQueues[sessionID]; exists {
+		return len(queue)
+	}
+	return 0
 }
 
 // queueMessage adds a message to the session's queue
@@ -42,10 +55,14 @@ func queueMessage(sessionID, content string) {
 	if queue, exists := sessionQueues[sessionID]; exists {
 		select {
 		case queue <- content:
-			// Message queued successfully
+			queueLen := len(queue)
+			fmt.Printf("[SSE Queue] Message added to queue for session %s. Queue length: %d. Content preview: %.50s...\n", sessionID, queueLen, content)
 		default:
-			// Queue is full, ignore message (or could implement overflow handling)
+			queueLen := len(queue)
+			fmt.Printf("[SSE Queue] Queue full for session %s! Message dropped. Queue length: %d. Content preview: %.50s...\n", sessionID, queueLen, content)
 		}
+	} else {
+		fmt.Printf("[SSE Queue] No queue exists for session %s, message dropped. Content preview: %.50s...\n", sessionID, content)
 	}
 }
 
@@ -55,8 +72,12 @@ func cleanupMessageQueue(sessionID string) {
 	defer queuesMutex.Unlock()
 	
 	if queue, exists := sessionQueues[sessionID]; exists {
+		queueLen := len(queue)
 		close(queue)
 		delete(sessionQueues, sessionID)
+		fmt.Printf("[SSE Queue] Cleaned up queue for session %s. Final queue length: %d. Remaining active sessions: %d\n", sessionID, queueLen, len(sessionQueues))
+	} else {
+		fmt.Printf("[SSE Queue] Attempted to cleanup non-existent queue for session %s\n", sessionID)
 	}
 }
 
@@ -119,8 +140,12 @@ func HandleSSEStream(ctx context.Context, handler *api.QueryHandler, w http.Resp
 		case content, ok := <-messageQueue:
 			if !ok {
 				// Queue closed, end connection
+				fmt.Printf("[SSE Queue] Message queue closed for session %s, ending connection\n", sessionID)
 				return
 			}
+			
+			remainingLen := getQueueLength(sessionID)
+			fmt.Printf("[SSE Queue] Popped message from queue for session %s. Remaining queue length: %d. Content preview: %.50s...\n", sessionID, remainingLen, content)
 			
 			// Process the message
 			if err := processMessage(ctx, handler, w, flusher, sessionID, content); err != nil {
@@ -351,18 +376,28 @@ func WriteSSEEvent(w http.ResponseWriter, event agent.AgentEvent) error {
 
 		// Send completion event only for final events, include final content
 		if event.Done {
-			content := event.Message.Content().String()
-			eventData := map[string]interface{}{
-				"type":      "complete",
-				"messageId": event.Message.ID,
-				"done":      true,
+			// Check if this is a permission denied error
+			if event.Message.FinishReason() == "permission_denied" {
+				eventData := map[string]interface{}{
+					"type":  "error",
+					"error": "Permission denied",
+				}
+				jsonData, _ := json.Marshal(eventData)
+				fmt.Fprintf(w, "event: error\ndata: %s\n\n", string(jsonData))
+			} else {
+				content := event.Message.Content().String()
+				eventData := map[string]interface{}{
+					"type":      "complete",
+					"messageId": event.Message.ID,
+					"done":      true,
+				}
+				// Only include content if it's not empty
+				if content != "" {
+					eventData["content"] = content
+				}
+				jsonData, _ := json.Marshal(eventData)
+				fmt.Fprintf(w, "event: complete\ndata: %s\n\n", string(jsonData))
 			}
-			// Only include content if it's not empty
-			if content != "" {
-				eventData["content"] = content
-			}
-			jsonData, _ := json.Marshal(eventData)
-			fmt.Fprintf(w, "event: complete\ndata: %s\n\n", string(jsonData))
 		}
 
 	case agent.AgentEventTypeError:

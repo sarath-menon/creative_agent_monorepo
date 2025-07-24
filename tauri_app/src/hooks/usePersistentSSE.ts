@@ -115,7 +115,6 @@ export function usePersistentSSE(sessionId: string): PersistentSSEHook {
     });
 
     eventSource.addEventListener('complete', (event) => {
-      console.log('Persistent SSE complete event:', event.data);
       try {
         const data = JSON.parse(event.data);
         setState(prev => ({
@@ -194,7 +193,6 @@ export function usePersistentSSE(sessionId: string): PersistentSSEHook {
       throw new Error('No active SSE connection');
     }
 
-    console.log('Sending message to queue:', content);
 
     // Reset state for new message
     setState(prev => ({
@@ -223,7 +221,6 @@ export function usePersistentSSE(sessionId: string): PersistentSSEHook {
       }
 
       const result = await response.json();
-      console.log('Message queued successfully:', result);
     } catch (error) {
       console.error('Failed to send message:', error);
       setState(prev => ({

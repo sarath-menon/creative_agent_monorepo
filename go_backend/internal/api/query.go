@@ -14,6 +14,7 @@ import (
 	"go_general_agent/internal/config"
 	"go_general_agent/internal/llm/agent"
 	"go_general_agent/internal/llm/tools"
+	"go_general_agent/internal/logging"
 )
 
 // JSON-RPC Request
@@ -38,13 +39,13 @@ type QueryError struct {
 
 // Structured data types
 type SessionData struct {
-	ID              string    `json:"id"`
-	Title           string    `json:"title"`
-	MessageCount    int64     `json:"messageCount"`
-	PromptTokens    int64     `json:"promptTokens"`
-	CompletionTokens int64    `json:"completionTokens"`
-	Cost            float64   `json:"cost"`
-	CreatedAt       time.Time `json:"createdAt"`
+	ID               string    `json:"id"`
+	Title            string    `json:"title"`
+	MessageCount     int64     `json:"messageCount"`
+	PromptTokens     int64     `json:"promptTokens"`
+	CompletionTokens int64     `json:"completionTokens"`
+	Cost             float64   `json:"cost"`
+	CreatedAt        time.Time `json:"createdAt"`
 }
 
 type ToolData struct {
@@ -157,7 +158,7 @@ func (h *QueryHandler) HandleQueryType(ctx context.Context, queryType string) *Q
 			return h.Handle(ctx, req)
 		}
 	}
-	
+
 	// Invalid query type
 	return &QueryResponse{
 		Error: &QueryError{
@@ -347,8 +348,8 @@ func (h *QueryHandler) handleSessionsSelect(ctx context.Context, req *QueryReque
 
 func (h *QueryHandler) handleSessionsCreate(ctx context.Context, req *QueryRequest) *QueryResponse {
 	var params struct {
-		Title     string `json:"title"`
-		SetCurrent bool  `json:"setCurrent,omitempty"`
+		Title      string `json:"title"`
+		SetCurrent bool   `json:"setCurrent,omitempty"`
 	}
 
 	if err := json.Unmarshal(req.Params, &params); err != nil {
@@ -382,6 +383,10 @@ func (h *QueryHandler) handleSessionsCreate(ctx context.Context, req *QueryReque
 			ID: req.ID,
 		}
 	}
+
+	// Auto-approve permissions for API sessions to enable tool usage by default
+	logging.Info("[API] Auto-approving permissions for new API session: %s\n", session.ID)
+	h.app.Permissions.AutoApproveSession(session.ID)
 
 	// Optionally set as current
 	if params.SetCurrent {
@@ -580,7 +585,7 @@ func (h *QueryHandler) handleCommandsList(ctx context.Context, req *QueryRequest
 
 	var result []CommandData
 	builtins := map[string]bool{
-		"help": true, "clear": true, "session": true, 
+		"help": true, "clear": true, "session": true,
 		"sessions": true, "tools": true, "mcp": true,
 	}
 
@@ -645,7 +650,7 @@ func (h *QueryHandler) handleCommandsGet(ctx context.Context, req *QueryRequest)
 	}
 
 	builtins := map[string]bool{
-		"help": true, "clear": true, "session": true, 
+		"help": true, "clear": true, "session": true,
 		"sessions": true, "tools": true, "mcp": true,
 	}
 
@@ -728,18 +733,18 @@ func (h *QueryHandler) handleMessagesSend(ctx context.Context, req *QueryRequest
 		}
 
 		log.Printf("Executing command: '%s' with args: '%s'", parsed.Name, parsed.Arguments)
-		
+
 		commandResult, execErr := h.commandRegistry.ExecuteCommand(ctx, parsed.Name, parsed.Arguments)
 		if execErr != nil {
 			log.Printf("Command execution failed for '%s': %v", parsed.Name, execErr)
-			
+
 			// Check if it's a "command not found" error
 			if strings.Contains(execErr.Error(), "command not found") {
 				// List available commands for debugging
 				allCommands := h.commandRegistry.GetAllCommands()
 				commandNames := getCommandNames(allCommands)
 				log.Printf("Available commands: %v", commandNames)
-				
+
 				return &QueryResponse{
 					Error: &QueryError{
 						Code:    -32000,
@@ -748,7 +753,7 @@ func (h *QueryHandler) handleMessagesSend(ctx context.Context, req *QueryRequest
 					ID: req.ID,
 				}
 			}
-			
+
 			return &QueryResponse{
 				Error: &QueryError{
 					Code:    -32000,
@@ -757,14 +762,14 @@ func (h *QueryHandler) handleMessagesSend(ctx context.Context, req *QueryRequest
 				ID: req.ID,
 			}
 		}
-		
+
 		log.Printf("Command '%s' executed successfully, result length: %d", parsed.Name, len(commandResult))
 
 		// Return the command result immediately as a message
 		return &QueryResponse{
 			Result: map[string]interface{}{
 				"id":       "cmd-" + parsed.Name,
-				"role":     "assistant", 
+				"role":     "assistant",
 				"content":  params.Content,
 				"response": commandResult,
 			},

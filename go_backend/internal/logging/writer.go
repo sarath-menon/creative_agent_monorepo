@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -41,6 +42,12 @@ var defaultLogData = &LogData{
 type writer struct{}
 
 func (w *writer) Write(p []byte) (int, error) {
+	// First, write to stdout so it gets captured by shoreman
+	if _, err := os.Stdout.Write(p); err != nil {
+		return 0, fmt.Errorf("writing to stdout: %w", err)
+	}
+	
+	// Then parse and store the log message for internal use
 	d := logfmt.NewDecoder(bytes.NewReader(p))
 
 	for d.ScanRecord() {
