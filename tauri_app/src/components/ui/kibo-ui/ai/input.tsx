@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowUpIcon, ArrowUp, Loader2Icon, SendIcon, SquareIcon, XIcon } from 'lucide-react';
+import { ArrowUpIcon, ArrowUp, Loader2Icon, SendIcon, SquareIcon, XIcon, PlayIcon } from 'lucide-react';
 import type {
   ComponentProps,
   HTMLAttributes,
@@ -187,7 +187,8 @@ export const AIInputButton = ({
 };
 
 export type AIInputSubmitProps = ComponentProps<typeof Button> & {
-  status?: 'submitted' | 'streaming' | 'ready' | 'error';
+  status?: 'submitted' | 'streaming' | 'ready' | 'error' | 'paused';
+  onPauseClick?: () => void;
 };
 
 export const AIInputSubmit = ({
@@ -196,14 +197,25 @@ export const AIInputSubmit = ({
   size = 'icon',
   status,
   children,
+  onPauseClick,
   ...props
 }: AIInputSubmitProps) => {
   let Icon = <ArrowUpIcon className='size-6' />;
+  let buttonType: "submit" | "button" = "submit";
+  let onClick = props.onClick;
 
   if (status === 'submitted') {
     Icon = <Loader2Icon className="animate-spin" />;
+    buttonType = "button"; // Prevent form submission
+    onClick = undefined; // Disable click handling
   } else if (status === 'streaming') {
     Icon = <SquareIcon />;
+    buttonType = "button"; // Don't submit when streaming
+    onClick = onPauseClick; // Use pause click handler
+  } else if (status === 'paused') {
+    Icon = <PlayIcon className='size-5' />;
+    buttonType = "button"; // Don't submit when paused
+    onClick = onPauseClick; // Use resume click handler
   } else if (status === 'error') {
     Icon = <XIcon />;
   }
@@ -212,8 +224,9 @@ export const AIInputSubmit = ({
     <Button
       className={cn('gap-1.5 rounded-full ', className)}
       size={size}
-      type="submit"
+      type={buttonType}
       variant={variant}
+      onClick={onClick}
       {...props}
     >
       {children ?? Icon}

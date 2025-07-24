@@ -18,10 +18,13 @@ export type PersistentSSEState = {
   finalContent: string | null;
   completed: boolean;
   processing: boolean; // True when processing a message
+  isPaused: boolean; // True when session is paused
 };
 
 export type PersistentSSEHook = PersistentSSEState & {
   sendMessage: (content: string) => Promise<void>;
+  pauseMessage: () => Promise<void>;
+  resumeMessage: () => Promise<void>;
 };
 
 export function usePersistentSSE(sessionId: string): PersistentSSEHook {
@@ -33,6 +36,7 @@ export function usePersistentSSE(sessionId: string): PersistentSSEHook {
     finalContent: null,
     completed: false,
     processing: false,
+    isPaused: false,
   });
   
   const eventSourceRef = useRef<EventSource | null>(null);
@@ -61,6 +65,7 @@ export function usePersistentSSE(sessionId: string): PersistentSSEHook {
       finalContent: null,
       completed: false,
       processing: false,
+      isPaused: false,
     });
     
     toolCallsRef.current.clear();
@@ -122,10 +127,11 @@ export function usePersistentSSE(sessionId: string): PersistentSSEHook {
           finalContent: data.content || '',
           completed: true,
           processing: false, // Message processing complete
+          isPaused: false, // Clear pause state on completion
         }));
       } catch (err) {
         console.error('Failed to parse complete event:', err, event.data);
-        setState(prev => ({ ...prev, processing: false }));
+        setState(prev => ({ ...prev, processing: false, isPaused: false }));
       }
     });
 
@@ -202,6 +208,7 @@ export function usePersistentSSE(sessionId: string): PersistentSSEHook {
       finalContent: null,
       completed: false,
       processing: true, // Mark as processing when sending message
+      isPaused: false, // Clear pause state when sending new message
     }));
     
     toolCallsRef.current.clear();
@@ -232,8 +239,82 @@ export function usePersistentSSE(sessionId: string): PersistentSSEHook {
     }
   }, [sessionId, state.connected]);
 
+  // Function to pause message processing
+  const pauseMessage = useCallback(async () => {
+    if (!sessionId || !state.connected) {
+      throw new Error('No active SSE connection');
+    }
+
+    try {
+      const response = await fetch(`http://localhost:8088/stream/${encodeURIComponent(sessionId)}/pause`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to pause session: ${response.status} ${errorText}`);
+      }
+
+      const result = await response.json();
+      console.log('Session paused:', result);
+      
+      setState(prev => ({
+        ...prev,
+        isPaused: true,
+      }));
+    } catch (error) {
+      console.error('Failed to pause session:', error);
+      setState(prev => ({
+        ...prev,
+        error: error instanceof Error ? error.message : 'Failed to pause session',
+      }));
+      throw error;
+    }
+  }, [sessionId, state.connected]);
+
+  // Function to resume message processing
+  const resumeMessage = useCallback(async () => {
+    if (!sessionId || !state.connected) {
+      throw new Error('No active SSE connection');
+    }
+
+    try {
+      const response = await fetch(`http://localhost:8088/stream/${encodeURIComponent(sessionId)}/resume`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to resume session: ${response.status} ${errorText}`);
+      }
+
+      const result = await response.json();
+      console.log('Session resumed:', result);
+      
+      setState(prev => ({
+        ...prev,
+        isPaused: false,
+      }));
+    } catch (error) {
+      console.error('Failed to resume session:', error);
+      setState(prev => ({
+        ...prev,
+        error: error instanceof Error ? error.message : 'Failed to resume session',
+      }));
+      throw error;
+    }
+  }, [sessionId, state.connected]);
+
   return {
     ...state,
     sendMessage,
+    pauseMessage,
+    resumeMessage,
   };
 }

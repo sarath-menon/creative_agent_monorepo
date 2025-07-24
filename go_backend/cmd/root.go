@@ -277,9 +277,13 @@ func startHTTPServer(ctx context.Context, app *app.App, host string, port int) e
 
 	// Add message queue endpoint for persistent SSE
 	mux.HandleFunc("/stream/", func(w http.ResponseWriter, r *http.Request) {
-		// Only handle message queueing paths like /stream/{sessionId}/message
+		// Handle different stream endpoints
 		if strings.HasSuffix(r.URL.Path, "/message") {
 			httphandlers.HandleMessageQueue(w, r)
+		} else if strings.HasSuffix(r.URL.Path, "/pause") {
+			httphandlers.HandlePauseSession(handler, w, r)
+		} else if strings.HasSuffix(r.URL.Path, "/resume") {
+			httphandlers.HandleResumeSession(w, r)
 		} else {
 			http.NotFound(w, r)
 		}

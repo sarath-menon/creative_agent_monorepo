@@ -20,6 +20,19 @@ var (
 	queuesMutex   = sync.RWMutex{}
 )
 
+// Session pause state management
+var (
+	pausedSessions = make(map[string]bool)
+	pauseMutex     = sync.RWMutex{}
+)
+
+// Session pause signaling channels
+var (
+	pauseSignals  = make(map[string]chan struct{})
+	resumeSignals = make(map[string]chan struct{})
+	signalsMutex  = sync.RWMutex{}
+)
+
 // getOrCreateMessageQueue gets or creates a message queue for a session
 func getOrCreateMessageQueue(sessionID string) chan string {
 	queuesMutex.Lock()
@@ -47,23 +60,52 @@ func getQueueLength(sessionID string) int {
 	return 0
 }
 
+// getOrCreatePauseSignals gets or creates pause/resume signal channels for a session
+func getOrCreatePauseSignals(sessionID string) (pauseCh, resumeCh chan struct{}) {
+	signalsMutex.Lock()
+	defer signalsMutex.Unlock()
+	
+	pauseCh, pauseExists := pauseSignals[sessionID]
+	if !pauseExists {
+		pauseCh = make(chan struct{}, 1)
+		pauseSignals[sessionID] = pauseCh
+	}
+	
+	resumeCh, resumeExists := resumeSignals[sessionID]
+	if !resumeExists {
+		resumeCh = make(chan struct{}, 1)
+		resumeSignals[sessionID] = resumeCh
+	}
+	
+	if !pauseExists || !resumeExists {
+		fmt.Printf("[SSE Signals] Created pause/resume channels for session %s\n", sessionID)
+	}
+	
+	return pauseCh, resumeCh
+}
+
 // queueMessage adds a message to the session's queue
 func queueMessage(sessionID, content string) {
 	queuesMutex.RLock()
-	defer queuesMutex.RUnlock()
 	
-	if queue, exists := sessionQueues[sessionID]; exists {
-		select {
-		case queue <- content:
-			queueLen := len(queue)
-			fmt.Printf("[SSE Queue] Message added to queue for session %s. Queue length: %d. Content preview: %.50s...\n", sessionID, queueLen, content)
-		default:
-			queueLen := len(queue)
-			fmt.Printf("[SSE Queue] Queue full for session %s! Message dropped. Queue length: %d. Content preview: %.50s...\n", sessionID, queueLen, content)
-		}
-	} else {
+	queue, exists := sessionQueues[sessionID]
+	if !exists {
+		queuesMutex.RUnlock()
 		fmt.Printf("[SSE Queue] No queue exists for session %s, message dropped. Content preview: %.50s...\n", sessionID, content)
+		return
 	}
+	
+	// Hold read lock during entire channel operation to prevent cleanup race
+	select {
+	case queue <- content:
+		queueLen := len(queue)
+		fmt.Printf("[SSE Queue] Message added to queue for session %s. Queue length: %d. Content preview: %.50s...\n", sessionID, queueLen, content)
+	default:
+		queueLen := len(queue)
+		fmt.Printf("[SSE Queue] Queue full for session %s! Message dropped. Queue length: %d. Content preview: %.50s...\n", sessionID, queueLen, content)
+	}
+	
+	queuesMutex.RUnlock()
 }
 
 // cleanupMessageQueue removes the message queue for a session
@@ -79,6 +121,75 @@ func cleanupMessageQueue(sessionID string) {
 	} else {
 		fmt.Printf("[SSE Queue] Attempted to cleanup non-existent queue for session %s\n", sessionID)
 	}
+	
+	// Clean up pause state
+	pauseMutex.Lock()
+	delete(pausedSessions, sessionID)
+	pauseMutex.Unlock()
+	
+	// Clean up pause signal channels
+	signalsMutex.Lock()
+	if pauseCh, exists := pauseSignals[sessionID]; exists {
+		close(pauseCh)
+		delete(pauseSignals, sessionID)
+	}
+	if resumeCh, exists := resumeSignals[sessionID]; exists {
+		close(resumeCh)
+		delete(resumeSignals, sessionID)
+	}
+	signalsMutex.Unlock()
+	fmt.Printf("[SSE Signals] Cleaned up pause/resume channels for session %s\n", sessionID)
+}
+
+// pauseSession pauses message processing for a session
+func pauseSession(sessionID string) {
+	pauseMutex.Lock()
+	defer pauseMutex.Unlock()
+	pausedSessions[sessionID] = true
+	
+	// Send pause signal to active SSE connections
+	signalsMutex.RLock()
+	if pauseCh, exists := pauseSignals[sessionID]; exists {
+		select {
+		case pauseCh <- struct{}{}:
+			fmt.Printf("[SSE Pause] Session %s paused and signal sent\n", sessionID)
+		default:
+			// Channel buffer full, signal already sent
+			fmt.Printf("[SSE Pause] Session %s paused (signal already pending)\n", sessionID)
+		}
+	} else {
+		fmt.Printf("[SSE Pause] Session %s paused (no active SSE connection)\n", sessionID)
+	}
+	signalsMutex.RUnlock()
+}
+
+// resumeSession resumes message processing for a session
+func resumeSession(sessionID string) {
+	pauseMutex.Lock()
+	defer pauseMutex.Unlock()
+	delete(pausedSessions, sessionID)
+	
+	// Send resume signal to active SSE connections
+	signalsMutex.RLock()
+	if resumeCh, exists := resumeSignals[sessionID]; exists {
+		select {
+		case resumeCh <- struct{}{}:
+			fmt.Printf("[SSE Pause] Session %s resumed and signal sent\n", sessionID)
+		default:
+			// Channel buffer full, signal already sent
+			fmt.Printf("[SSE Pause] Session %s resumed (signal already pending)\n", sessionID)
+		}
+	} else {
+		fmt.Printf("[SSE Pause] Session %s resumed (no active SSE connection)\n", sessionID)
+	}
+	signalsMutex.RUnlock()
+}
+
+// isSessionPaused checks if a session is currently paused
+func isSessionPaused(sessionID string) bool {
+	pauseMutex.RLock()
+	defer pauseMutex.RUnlock()
+	return pausedSessions[sessionID]
 }
 
 // HandleSSEStream handles persistent Server-Sent Events streaming for agent responses
@@ -119,6 +230,9 @@ func HandleSSEStream(ctx context.Context, handler *api.QueryHandler, w http.Resp
 	// Get or create message queue for this session
 	messageQueue := getOrCreateMessageQueue(sessionID)
 	
+	// Get or create pause/resume signal channels for this session
+	pauseCh, resumeCh := getOrCreatePauseSignals(sessionID)
+	
 	// Clean up when connection closes
 	defer cleanupMessageQueue(sessionID)
 
@@ -128,29 +242,52 @@ func HandleSSEStream(ctx context.Context, handler *api.QueryHandler, w http.Resp
 
 	// Monitor for client disconnect
 	clientGone := r.Context().Done()
+	
+	// Track whether we're currently paused
+	isPaused := isSessionPaused(sessionID)
 
 	// Keep connection alive and process messages from queue
 	for {
-		select {
-		case <-clientGone:
-			// Client disconnected, cancel any running agent
-			handler.GetApp().CoderAgent.Cancel(sessionID)
-			return
-			
-		case content, ok := <-messageQueue:
-			if !ok {
-				// Queue closed, end connection
-				fmt.Printf("[SSE Queue] Message queue closed for session %s, ending connection\n", sessionID)
+		if isPaused {
+			// Session is paused, wait for resume signal or client disconnect
+			select {
+			case <-clientGone:
+				// Client disconnected, cancel any running agent
+				handler.GetApp().CoderAgent.Cancel(sessionID)
 				return
+			case <-resumeCh:
+				// Session resumed, continue processing
+				isPaused = false
+				fmt.Printf("[SSE Pause] Session %s resumed, continuing message processing\n", sessionID)
 			}
-			
-			remainingLen := getQueueLength(sessionID)
-			fmt.Printf("[SSE Queue] Popped message from queue for session %s. Remaining queue length: %d. Content preview: %.50s...\n", sessionID, remainingLen, content)
-			
-			// Process the message
-			if err := processMessage(ctx, handler, w, flusher, sessionID, content); err != nil {
-				fmt.Printf("Error processing message: %v\n", err)
+		} else {
+			// Session is not paused, process messages normally
+			select {
+			case <-clientGone:
+				// Client disconnected, cancel any running agent
+				handler.GetApp().CoderAgent.Cancel(sessionID)
 				return
+				
+			case <-pauseCh:
+				// Session paused, set flag and continue loop
+				isPaused = true
+				fmt.Printf("[SSE Pause] Session %s paused, blocking message processing\n", sessionID)
+				
+			case content, ok := <-messageQueue:
+				if !ok {
+					// Queue closed, end connection
+					fmt.Printf("[SSE Queue] Message queue closed for session %s, ending connection\n", sessionID)
+					return
+				}
+				
+				remainingLen := getQueueLength(sessionID)
+				fmt.Printf("[SSE Queue] Processing message from queue for session %s. Remaining queue length: %d. Content preview: %.50s...\n", sessionID, remainingLen, content)
+				
+				// Process the message
+				if err := processMessage(ctx, handler, w, flusher, sessionID, content); err != nil {
+					fmt.Printf("Error processing message: %v\n", err)
+					return
+				}
 			}
 		}
 	}
@@ -336,6 +473,95 @@ func HandleMessageQueue(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	response := map[string]interface{}{
 		"status":    "queued",
+		"sessionId": sessionID,
+	}
+	json.NewEncoder(w).Encode(response)
+}
+
+// HandlePauseSession handles PUT requests to pause a session
+func HandlePauseSession(handler *api.QueryHandler, w http.ResponseWriter, r *http.Request) {
+	// Set CORS headers
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "PUT, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+
+	// Handle preflight OPTIONS request
+	if r.Method == "OPTIONS" {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	if r.Method != "PUT" {
+		http.Error(w, "Only PUT method allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Extract sessionID from URL path
+	// Assuming URL pattern: /stream/{sessionId}/pause
+	pathParts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+	if len(pathParts) < 2 || pathParts[0] != "stream" {
+		http.Error(w, "Invalid URL path", http.StatusBadRequest)
+		return
+	}
+	sessionID := pathParts[1]
+
+	// Check if session is currently processing and add interruption message if so
+	if handler.GetApp().CoderAgent.IsSessionBusy(sessionID) {
+		fmt.Printf("[SSE Pause] Session %s was busy, adding interruption message (TODO: implement message creation)\n", sessionID)
+		// TODO: Add interruption message to conversation once message interface is clarified
+	}
+	
+	// Cancel any active processing for this session 
+	handler.GetApp().CoderAgent.Cancel(sessionID)
+	
+	// Pause the session
+	pauseSession(sessionID)
+
+	// Return success response
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	response := map[string]interface{}{
+		"status":    "paused",
+		"sessionId": sessionID,
+	}
+	json.NewEncoder(w).Encode(response)
+}
+
+// HandleResumeSession handles PUT requests to resume a session
+func HandleResumeSession(w http.ResponseWriter, r *http.Request) {
+	// Set CORS headers
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "PUT, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+
+	// Handle preflight OPTIONS request
+	if r.Method == "OPTIONS" {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	if r.Method != "PUT" {
+		http.Error(w, "Only PUT method allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Extract sessionID from URL path
+	// Assuming URL pattern: /stream/{sessionId}/resume
+	pathParts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+	if len(pathParts) < 2 || pathParts[0] != "stream" {
+		http.Error(w, "Invalid URL path", http.StatusBadRequest)
+		return
+	}
+	sessionID := pathParts[1]
+
+	// Resume the session
+	resumeSession(sessionID)
+
+	// Return success response
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	response := map[string]interface{}{
+		"status":    "resumed",
 		"sessionId": sessionID,
 	}
 	json.NewEncoder(w).Encode(response)

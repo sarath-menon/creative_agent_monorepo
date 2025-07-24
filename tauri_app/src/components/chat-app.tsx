@@ -70,6 +70,7 @@ export function ChatApp() {
   const [showSlashCommands, setShowSlashCommands] = useState(false);
   const [selectedCommandIndex, setSelectedCommandIndex] = useState(0);
   const [inputElement, setInputElement] = useState<HTMLTextAreaElement | null>(null);
+  const interruptedMessageAddedRef = useRef(false);
 
   const { data: session, isLoading: sessionLoading, error: sessionError } = useSession();
   const sendMessage = useSendMessage();
@@ -150,6 +151,9 @@ export function ChatApp() {
         from: 'assistant',
         toolCalls: convertedToolCalls.length > 0 ? convertedToolCalls : undefined
       }]);
+      
+      // Reset interrupted message guard when processing completes
+      interruptedMessageAddedRef.current = false;
     }
   }, [sseStream.completed, sseStream.finalContent, sseStream.processing]);
 
@@ -160,6 +164,14 @@ export function ChatApp() {
       setMessages(prev => [...prev, { content: errorMessage, from: 'assistant' }]);
     }
   }, [sseStream.error]);
+
+  // Handle pause state changes to add "Interrupted" message
+  useEffect(() => {
+    if (sseStream.isPaused && sseStream.processing && !interruptedMessageAddedRef.current) {
+      setMessages(prev => [...prev, { content: "Interrupted", from: 'assistant' }]);
+      interruptedMessageAddedRef.current = true;
+    }
+  }, [sseStream.isPaused, sseStream.processing]);
 
   const handleSubmit: FormEventHandler<HTMLFormElement> = async (event) => {
     event.preventDefault();
@@ -173,6 +185,9 @@ export function ChatApp() {
     setMessages(prev => [...prev, { content: messageText, from: 'user' }]);
     setText('');
     
+    // Reset interrupted message guard for new message
+    interruptedMessageAddedRef.current = false;
+    
     // Send message via persistent SSE
     try {
       await sseStream.sendMessage(messageText);
@@ -181,6 +196,29 @@ export function ChatApp() {
       // Error will be handled by the error useEffect
     }
   };
+
+  // Handle pause/resume button clicks
+  const handlePauseResumeClick = async () => {
+    try {
+      if (sseStream.isPaused) {
+        await sseStream.resumeMessage();
+      } else if (sseStream.processing) {
+        await sseStream.pauseMessage();
+      }
+    } catch (error) {
+      console.error('Failed to pause/resume:', error);
+    }
+  };
+
+  // Calculate submit button status and disabled state
+  const buttonStatus = sseStream.isPaused ? 'paused' : 
+                      sseStream.processing ? 'streaming' : 
+                      sseStream.error ? 'error' : 'ready';
+  
+  // Ready state: need text and connection. Other states: only need connection for pause/resume
+  const isSubmitDisabled = buttonStatus === 'ready' 
+    ? (!text || !session?.id || sessionLoading || !sseStream.connected)
+    : (!session?.id || sessionLoading || !sseStream.connected);
 
   return (
     <div className="flex flex-col h-screen p-4 gap-4">
@@ -230,7 +268,7 @@ export function ChatApp() {
               <AIMessageContent>
                 {sseStream.toolCalls.length > 0 ? (
                   <>
-                    <AIToolLadder className="mt-4">
+                    <AIToolLadder >
                       {sseStream.toolCalls.map((toolCall, toolIndex) => (
                         <AIToolStep
                           key={`streaming-${toolCall.id}-${toolIndex}`}
@@ -298,9 +336,9 @@ export function ChatApp() {
 
             </AIInputTools>
             <AIInputSubmit 
-
-              disabled={!text || !session?.id || sessionLoading || !sseStream.connected} 
-              status={sseStream.processing ? 'streaming' : sseStream.error ? 'error' : 'ready'} 
+              disabled={isSubmitDisabled}
+              status={buttonStatus}
+              onPauseClick={handlePauseResumeClick}
             />
           </AIInputToolbar>
         </AIInput>
