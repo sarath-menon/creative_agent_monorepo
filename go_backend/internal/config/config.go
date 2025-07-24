@@ -9,9 +9,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/spf13/viper"
 	"go_general_agent/internal/llm/models"
 	"go_general_agent/internal/logging"
+
+	"github.com/spf13/viper"
 )
 
 // MCPType defines the type of MCP (Model Control Protocol) server.
@@ -224,25 +225,29 @@ func setDefaults(debug bool) {
 // setProviderDefaults configures LLM provider defaults for embedded binary.
 func setProviderDefaults() {
 	// Set API keys from environment for supported providers
-	if apiKey := os.Getenv("ANTHROPIC_API_KEY"); apiKey != "" {
-		viper.SetDefault("providers.anthropic.apiKey", apiKey)
-	}
-	if apiKey := os.Getenv("OPENAI_API_KEY"); apiKey != "" {
-		viper.SetDefault("providers.openai.apiKey", apiKey)
-	}
-	if apiKey := os.Getenv("GEMINI_API_KEY"); apiKey != "" {
-		viper.SetDefault("providers.gemini.apiKey", apiKey)
-	}
-	if apiKey := os.Getenv("GROQ_API_KEY"); apiKey != "" {
-		viper.SetDefault("providers.groq.apiKey", apiKey)
-	}
-	if apiKey := os.Getenv("OPENROUTER_API_KEY"); apiKey != "" {
-		viper.SetDefault("providers.openrouter.apiKey", apiKey)
-	}
+
+	logging.Info("azure openai endpoint", "endpoint", os.Getenv("AZURE_OPENAI_ENDPOINT"))
+
 	if apiKey := os.Getenv("AZURE_OPENAI_ENDPOINT"); apiKey != "" {
 		// api-key may be empty when using Entra ID credentials – that's okay
 		viper.SetDefault("providers.azure.apiKey", os.Getenv("AZURE_OPENAI_API_KEY"))
 	}
+
+	// if apiKey := os.Getenv("ANTHROPIC_API_KEY"); apiKey != "" {
+	// 	viper.SetDefault("providers.anthropic.apiKey", apiKey)
+	// }
+	// if apiKey := os.Getenv("OPENAI_API_KEY"); apiKey != "" {
+	// 	viper.SetDefault("providers.openai.apiKey", apiKey)
+	// }
+	// if apiKey := os.Getenv("GEMINI_API_KEY"); apiKey != "" {
+	// 	viper.SetDefault("providers.gemini.apiKey", apiKey)
+	// }
+	// if apiKey := os.Getenv("GROQ_API_KEY"); apiKey != "" {
+	// 	viper.SetDefault("providers.groq.apiKey", apiKey)
+	// }
+	// if apiKey := os.Getenv("OPENROUTER_API_KEY"); apiKey != "" {
+	// 	viper.SetDefault("providers.openrouter.apiKey", apiKey)
+	// }
 
 	// Set default model based on available providers (priority order)
 	if key := viper.GetString("providers.anthropic.apiKey"); strings.TrimSpace(key) != "" {
@@ -278,7 +283,7 @@ func setProviderDefaults() {
 
 	// Azure OpenAI configuration
 	if os.Getenv("AZURE_OPENAI_ENDPOINT") != "" {
-		viper.SetDefault("agents.main.model", models.AzureGPT41)
+		viper.SetDefault("agents.main.model", models.AzureGPT41Mini)
 		return
 	}
 
@@ -424,6 +429,8 @@ func validateAgent(cfg *Config, name AgentName, agent Agent) error {
 			return fmt.Errorf("no valid provider available for agent %s", name)
 		}
 	}
+
+	logging.Info("Selected provider", "agent", name, "model", agent.Model, "provider", provider)
 
 	// Validate max tokens
 	if agent.MaxTokens <= 0 {
@@ -606,7 +613,7 @@ func setDefaultModelForAgent(agent AgentName) bool {
 
 	if os.Getenv("AZURE_OPENAI_ENDPOINT") != "" {
 		cfg.Agents[agent] = Agent{
-			Model:           models.AzureGPT41,
+			Model:           models.AzureGPT41Mini,
 			MaxTokens:       4096,
 			ReasoningEffort: "medium",
 		}

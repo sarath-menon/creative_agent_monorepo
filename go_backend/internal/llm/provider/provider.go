@@ -117,9 +117,13 @@ func NewProvider(providerName models.ModelProvider, opts ...ProviderClientOption
 			client:  newOpenAIClient(clientOptions),
 		}, nil
 	case models.ProviderAzure:
+		client, err := newAzureClient(clientOptions)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create Azure client: %w", err)
+		}
 		return &baseProvider[AzureClient]{
 			options: clientOptions,
-			client:  newAzureClient(clientOptions),
+			client:  client,
 		}, nil
 	case models.ProviderVertexAI:
 		return &baseProvider[VertexAIClient]{

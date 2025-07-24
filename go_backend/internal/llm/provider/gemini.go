@@ -6,12 +6,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"go_general_agent/internal/config"
-	"go_general_agent/internal/llm/tools"
+	toolspkg "go_general_agent/internal/llm/tools"
 	"go_general_agent/internal/logging"
 	"go_general_agent/internal/message"
 	"google.golang.org/genai"
@@ -132,7 +134,7 @@ func (g *geminiClient) convertMessages(messages []message.Message) []*genai.Cont
 	return history
 }
 
-func (g *geminiClient) convertTools(tools []tools.BaseTool) []*genai.Tool {
+func (g *geminiClient) convertTools(tools []toolspkg.BaseTool) []*genai.Tool {
 	geminiTool := &genai.Tool{}
 	geminiTool.FunctionDeclarations = make([]*genai.FunctionDeclaration, 0, len(tools))
 
@@ -165,7 +167,7 @@ func (g *geminiClient) finishReason(reason genai.FinishReason) message.FinishRea
 	}
 }
 
-func (g *geminiClient) send(ctx context.Context, messages []message.Message, tools []tools.BaseTool) (*ProviderResponse, error) {
+func (g *geminiClient) send(ctx context.Context, messages []message.Message, tools []toolspkg.BaseTool) (*ProviderResponse, error) {
 	// Convert messages
 	geminiMessages := g.convertMessages(messages)
 
@@ -236,6 +238,16 @@ func (g *geminiClient) send(ctx context.Context, messages []message.Message, too
 				}
 			}
 		}
+
+		// Check for completely empty response (no content and no tool calls)
+		if content == "" && len(toolCalls) == 0 {
+			logging.Warn("Gemini returned empty response with no content or tool calls")
+			// Extract sessionID from context and log detailed debug information
+			if sessionID, ok := ctx.Value(toolspkg.SessionIDContextKey).(string); ok {
+				g.logEmptyResponseDetails(sessionID, messages, tools, resp)
+			}
+		}
+
 		finishReason := message.FinishReasonEndTurn
 		if len(resp.Candidates) > 0 {
 			finishReason = g.finishReason(resp.Candidates[0].FinishReason)
@@ -253,7 +265,7 @@ func (g *geminiClient) send(ctx context.Context, messages []message.Message, too
 	}
 }
 
-func (g *geminiClient) stream(ctx context.Context, messages []message.Message, tools []tools.BaseTool) <-chan ProviderEvent {
+func (g *geminiClient) stream(ctx context.Context, messages []message.Message, tools []toolspkg.BaseTool) <-chan ProviderEvent {
 	// Convert messages
 	geminiMessages := g.convertMessages(messages)
 
@@ -365,6 +377,14 @@ func (g *geminiClient) stream(ctx context.Context, messages []message.Message, t
 			eventChan <- ProviderEvent{Type: EventContentStop}
 
 			if finalResp != nil {
+				// Check for completely empty response (no content and no tool calls)
+				if currentContent == "" && len(toolCalls) == 0 {
+					logging.Warn("Gemini returned empty response with no content or tool calls")
+					// Extract sessionID from context and log detailed debug information
+					if sessionID, ok := ctx.Value(toolspkg.SessionIDContextKey).(string); ok {
+						g.logEmptyResponseDetails(sessionID, messages, tools, finalResp)
+					}
+				}
 
 				finishReason := message.FinishReasonEndTurn
 				if len(finalResp.Candidates) > 0 {
@@ -551,4 +571,58 @@ func contains(s string, substrs ...string) bool {
 		}
 	}
 	return false
+}
+
+// logEmptyResponseDetails logs detailed request and response information when Gemini returns empty responses
+func (g *geminiClient) logEmptyResponseDetails(sessionID string, messages []message.Message, tools []toolspkg.BaseTool, resp *genai.GenerateContentResponse) {
+	timestamp := time.Now().Format("20060102-150405")
+	
+	// Create log directory if it doesn't exist
+	logDir := "debug_logs"
+	os.MkdirAll(logDir, 0755)
+	
+	// Log request details
+	requestFile := filepath.Join(logDir, fmt.Sprintf("gemini-empty-response-%s-%s-request.txt", sessionID, timestamp))
+	requestData := map[string]interface{}{
+		"timestamp": time.Now().Format(time.RFC3339),
+		"sessionID": sessionID,
+		"messages": messages,
+		"tools": func() interface{} {
+			if len(tools) > 0 {
+				return g.convertTools(tools)
+			}
+			return []string{}
+		}(),
+		"systemMessage": g.providerOptions.systemMessage,
+		"model": g.providerOptions.model,
+		"maxTokens": g.providerOptions.maxTokens,
+	}
+	
+	requestJSON, _ := json.MarshalIndent(requestData, "", "  ")
+	os.WriteFile(requestFile, requestJSON, 0644)
+	
+	// Log response details
+	responseFile := filepath.Join(logDir, fmt.Sprintf("gemini-empty-response-%s-%s-response.txt", sessionID, timestamp))
+	responseData := map[string]interface{}{
+		"timestamp": time.Now().Format(time.RFC3339),
+		"sessionID": sessionID,
+		"response": resp,
+		"candidatesCount": func() int {
+			if resp != nil && resp.Candidates != nil {
+				return len(resp.Candidates)
+			}
+			return 0
+		}(),
+		"firstCandidateContent": func() interface{} {
+			if resp != nil && resp.Candidates != nil && len(resp.Candidates) > 0 && resp.Candidates[0].Content != nil {
+				return resp.Candidates[0].Content
+			}
+			return nil
+		}(),
+	}
+	
+	responseJSON, _ := json.MarshalIndent(responseData, "", "  ")
+	os.WriteFile(responseFile, responseJSON, 0644)
+	
+	logging.Info("Empty response debug files created: %s, %s", requestFile, responseFile)
 }

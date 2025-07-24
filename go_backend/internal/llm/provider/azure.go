@@ -1,6 +1,7 @@
 package provider
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
@@ -15,13 +16,16 @@ type azureClient struct {
 
 type AzureClient ProviderClient
 
-func newAzureClient(opts providerClientOptions) AzureClient {
+func newAzureClient(opts providerClientOptions) (AzureClient, error) {
 
 	endpoint := os.Getenv("AZURE_OPENAI_ENDPOINT")      // ex: https://foo.openai.azure.com
 	apiVersion := os.Getenv("AZURE_OPENAI_API_VERSION") // ex: 2025-04-01-preview
 
-	if endpoint == "" || apiVersion == "" {
-		return &azureClient{openaiClient: newOpenAIClient(opts).(*openaiClient)}
+	if endpoint == "" {
+		return nil, fmt.Errorf("Azure provider requires AZURE_OPENAI_ENDPOINT environment variable to be set")
+	}
+	if apiVersion == "" {
+		return nil, fmt.Errorf("Azure provider requires AZURE_OPENAI_API_VERSION environment variable to be set")
 	}
 
 	reqOpts := []option.RequestOption{
@@ -43,5 +47,5 @@ func newAzureClient(opts providerClientOptions) AzureClient {
 		client:          openai.NewClient(reqOpts...),
 	}
 
-	return &azureClient{openaiClient: base}
+	return &azureClient{openaiClient: base}, nil
 }
