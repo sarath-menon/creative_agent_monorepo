@@ -332,8 +332,6 @@ func (m *Model) processMessageCmd(message string) tea.Cmd {
 		// Clear message history cache since we added a new user message
 		m.clearMessageHistoryCache()
 
-		// Auto-approve permissions for TUI session
-		m.app.Permissions.AutoApproveSession(m.session.ID)
 
 		// Start processing with the agent
 		done, err := m.app.CoderAgent.Run(m.ctx, m.session.ID, message)
@@ -872,8 +870,6 @@ func (m Model) handleSlashCommand(input string) (Model, tea.Cmd) {
 			!strings.HasPrefix(result, "Current session") &&
 			!strings.HasPrefix(result, "No MCP") {
 			// This looks like a prompt for the agent, process it
-			m.app.Permissions.AutoApproveSession(m.session.ID)
-
 			done, err := m.app.CoderAgent.Run(m.ctx, m.session.ID, result)
 			if err != nil {
 				return errorMsg{error: err}

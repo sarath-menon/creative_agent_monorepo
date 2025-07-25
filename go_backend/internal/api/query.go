@@ -14,7 +14,6 @@ import (
 	"go_general_agent/internal/config"
 	"go_general_agent/internal/llm/agent"
 	"go_general_agent/internal/llm/tools"
-	"go_general_agent/internal/logging"
 )
 
 // JSON-RPC Request
@@ -384,9 +383,6 @@ func (h *QueryHandler) handleSessionsCreate(ctx context.Context, req *QueryReque
 		}
 	}
 
-	// Auto-approve permissions for API sessions to enable tool usage by default
-	logging.Info("[API] Auto-approving permissions for new API session: %s\n", session.ID)
-	h.app.Permissions.AutoApproveSession(session.ID)
 
 	// Optionally set as current
 	if params.SetCurrent {

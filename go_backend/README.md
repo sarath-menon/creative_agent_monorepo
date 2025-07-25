@@ -64,7 +64,7 @@
 - Automatic timestamping and relationship management
 
 ### 7. Supporting Services
-- **Permissions**: Request approval system
+- **Permissions**: Request approval system (can be bypassed with `--dangerously-skip-permissions` for trusted environments)
 - **Logging**: Structured logging throughout
 - **File Operations**: Safe file manipulation with history tracking
 - **Session Management**: Conversation state management
@@ -109,6 +109,9 @@ OpenCode also provides an HTTP JSON-RPC server for web-based integrations:
 
 # Start HTTP server on custom host and port
 ./build/go_general_agent --http-port 3000 --http-host 0.0.0.0
+
+# Start HTTP server with permissions skipped (for development/trusted environments)
+./build/go_general_agent --http-port 8080 --dangerously-skip-permissions
 
 # Run both TUI and HTTP server simultaneously
 ./build/go_general_agent --http-port 8080 --debug

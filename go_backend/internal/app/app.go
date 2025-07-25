@@ -90,8 +90,6 @@ func (a *App) RunNonInteractive(ctx context.Context, prompt string, outputFormat
 	}
 	logging.Info("Created session for non-interactive run", "session_id", sess.ID)
 
-	// Automatically approve all permission requests for this non-interactive session
-	a.Permissions.AutoApproveSession(sess.ID)
 
 	done, err := a.CoderAgent.Run(ctx, sess.ID, prompt)
 	if err != nil {

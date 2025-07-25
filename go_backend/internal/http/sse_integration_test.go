@@ -87,8 +87,6 @@ func setupTestServer(t *testing.T) (*httptest.Server, *app.App, string) {
 		t.Fatalf("Failed to create test session: %v", err)
 	}
 
-	// Auto-approve permissions for this test session
-	testApp.Permissions.AutoApproveSession(session.ID)
 
 	// Create HTTP handler
 	handler := api.NewQueryHandler(testApp)

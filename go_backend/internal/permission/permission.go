@@ -4,7 +4,6 @@ import (
 	"errors"
 	"log"
 	"path/filepath"
-	"slices"
 	"sync"
 	"time"
 
@@ -40,15 +39,13 @@ type Service interface {
 	Grant(permission PermissionRequest)
 	Deny(permission PermissionRequest)
 	Request(opts CreatePermissionRequest) bool
-	AutoApproveSession(sessionID string)
 }
 
 type permissionService struct {
 	*pubsub.Broker[PermissionRequest]
 
-	sessionPermissions  []PermissionRequest
-	pendingRequests     sync.Map
-	autoApproveSessions []string
+	sessionPermissions []PermissionRequest
+	pendingRequests    sync.Map
 }
 
 func (s *permissionService) GrantPersistant(permission PermissionRequest) {
@@ -77,8 +74,8 @@ func (s *permissionService) Request(opts CreatePermissionRequest) bool {
 	log.Printf("Permission request: SessionID=%s, ToolName=%s, Action=%s, Path=%s", 
 		opts.SessionID, opts.ToolName, opts.Action, opts.Path)
 	
-	if slices.Contains(s.autoApproveSessions, opts.SessionID) {
-		log.Printf("Auto-approved permission for session %s", opts.SessionID)
+	if config.Get().SkipPermissions {
+		log.Printf("Permissions globally skipped via --dangerously-skip-permissions flag")
 		return true
 	}
 	
@@ -120,10 +117,6 @@ func (s *permissionService) Request(opts CreatePermissionRequest) bool {
 		log.Printf("Permission request %s timed out after 30 seconds, denying", permission.ID)
 		return false
 	}
-}
-
-func (s *permissionService) AutoApproveSession(sessionID string) {
-	s.autoApproveSessions = append(s.autoApproveSessions, sessionID)
 }
 
 func NewPermissionService() Service {

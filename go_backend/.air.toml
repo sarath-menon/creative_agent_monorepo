@@ -3,7 +3,7 @@ testdata_dir = "testdata"
 tmp_dir = "tmp"
 
 [build]
-  args_bin = ["--http-port", "8088"]
+  args_bin = ["--http-port", "8088", "--dangerously-skip-permissions"]
   bin = "./build/go_general_agent"
   cmd = "go build -o ./build/go_general_agent ./main.go "
   delay = 0

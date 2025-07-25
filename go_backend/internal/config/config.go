@@ -72,13 +72,14 @@ type ShellConfig struct {
 
 // Config is the simplified configuration structure for embedded binary.
 type Config struct {
-	Data       Data                              `json:"data"`
-	WorkingDir string                            `json:"wd,omitempty"`
-	MCPServers map[string]MCPServer              `json:"mcpServers,omitempty"`
-	Providers  map[models.ModelProvider]Provider `json:"providers,omitempty"`
-	Agents     map[AgentName]Agent               `json:"agents,omitempty"`
-	Debug      bool                              `json:"debug,omitempty"`
-	Shell      ShellConfig                       `json:"shell,omitempty"`
+	Data            Data                              `json:"data"`
+	WorkingDir      string                            `json:"wd,omitempty"`
+	MCPServers      map[string]MCPServer              `json:"mcpServers,omitempty"`
+	Providers       map[models.ModelProvider]Provider `json:"providers,omitempty"`
+	Agents          map[AgentName]Agent               `json:"agents,omitempty"`
+	Debug           bool                              `json:"debug,omitempty"`
+	Shell           ShellConfig                       `json:"shell,omitempty"`
+	SkipPermissions bool                              `json:"skipPermissions,omitempty"`
 }
 
 // Application constants
@@ -100,16 +101,18 @@ var cfgMutex sync.RWMutex
 
 // Load initializes the configuration from environment variables and config files.
 // If debug is true, debug mode is enabled and log level is set to debug.
+// If skipPermissions is true, all permission prompts will be bypassed.
 // It returns an error if configuration loading fails.
-func Load(workingDir string, debug bool) (*Config, error) {
+func Load(workingDir string, debug bool, skipPermissions bool) (*Config, error) {
 	if cfg != nil {
 		return cfg, nil
 	}
 
 	cfg = &Config{
-		WorkingDir: workingDir,
-		MCPServers: make(map[string]MCPServer),
-		Providers:  make(map[models.ModelProvider]Provider),
+		WorkingDir:      workingDir,
+		MCPServers:      make(map[string]MCPServer),
+		Providers:       make(map[models.ModelProvider]Provider),
+		SkipPermissions: skipPermissions,
 	}
 
 	configureViper()

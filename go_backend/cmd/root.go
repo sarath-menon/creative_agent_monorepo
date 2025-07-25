@@ -70,6 +70,7 @@ and content creation workflows.`,
 		query, _ := cmd.Flags().GetString("query")
 		httpPort, _ := cmd.Flags().GetInt("http-port")
 		httpHost, _ := cmd.Flags().GetString("http-host")
+		skipPermissions, _ := cmd.Flags().GetBool("dangerously-skip-permissions")
 
 		// Validate format option
 		if !format.IsValid(outputFormat) {
@@ -89,7 +90,7 @@ and content creation workflows.`,
 			}
 			cwd = c
 		}
-		_, err := config.Load(cwd, debug)
+		_, err := config.Load(cwd, debug, skipPermissions)
 		if err != nil {
 			return err
 		}
@@ -409,6 +410,9 @@ func init() {
 	// HTTP server flags
 	rootCmd.Flags().Int("http-port", 0, "Start HTTP JSON-RPC server on this port (0 = disabled)")
 	rootCmd.Flags().String("http-host", "localhost", "HTTP server host")
+
+	// Permission flags
+	rootCmd.Flags().Bool("dangerously-skip-permissions", false, "Skip all permission prompts (DANGEROUS - use only in trusted environments)")
 
 	// Register custom validation for the format flag
 	rootCmd.RegisterFlagCompletionFunc("output-format", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
