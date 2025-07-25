@@ -815,6 +815,9 @@ func createAgentProvider(agentName config.AgentName) (provider.Provider, error) 
 	if providerCfg.Disabled {
 		return nil, fmt.Errorf("provider %s is not enabled", model.Provider)
 	}
+	if providerCfg.APIKey == "" {
+		return nil, fmt.Errorf("provider %s has no API key configured", model.Provider)
+	}
 	maxTokens := model.DefaultMaxTokens
 	if agentConfig.MaxTokens > 0 {
 		maxTokens = agentConfig.MaxTokens

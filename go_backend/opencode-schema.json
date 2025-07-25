@@ -197,13 +197,10 @@
       },
       "description": "Agent configurations",
       "properties": {
-        "coder": {
+        "main": {
           "$ref": "#/definitions/agent"
         },
-        "task": {
-          "$ref": "#/definitions/agent"
-        },
-        "title": {
+        "sub": {
           "$ref": "#/definitions/agent"
         }
       },

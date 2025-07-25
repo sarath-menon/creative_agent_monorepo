@@ -1,8 +1,14 @@
 {
   "$schema": "./opencode-schema.json",
-  "llm": {
-    "provider": "gemini",
-    "model": "gemini-2.5-flash"
+  "agents": {
+    "main": {
+      "model": "azure.gpt-4.1-mini",
+      "maxTokens": 4096
+    },
+    "sub": {
+      "model": "azure.gpt-4.1-mini", 
+      "maxTokens": 2048
+    }
   },
   "mcpServers": {
     "blender": {

@@ -181,32 +181,17 @@ func Load(workingDir string, debug bool) (*Config, error) {
 		cfg.Agents = make(map[AgentName]Agent)
 	}
 
-	// Set default for main agent if not configured
+	// Require explicit agent configuration
 	cfgMutex.RLock()
-	_, exists := cfg.Agents[AgentMain]
+	_, mainExists := cfg.Agents[AgentMain]
+	_, subExists := cfg.Agents[AgentSub]
 	cfgMutex.RUnlock()
-	if !exists {
-		cfgMutex.Lock()
-		cfg.Agents[AgentMain] = Agent{
-			Model:     models.Claude4Sonnet, // Default fallback
-			MaxTokens: 4096,
-		}
-		cfgMutex.Unlock()
-	}
 	
-	// Set default for sub-agent if not configured (uses same model as main but lower token limit)
-	cfgMutex.RLock()
-	_, existsSub := cfg.Agents[AgentSub]
-	mainAgent := cfg.Agents[AgentMain] // Get main agent config while we have the read lock
-	cfgMutex.RUnlock()
-	if !existsSub {
-		cfgMutex.Lock()
-		cfg.Agents[AgentSub] = Agent{
-			Model:           mainAgent.Model, // Use same model as main agent
-			MaxTokens:       2048,            // Lower token limit for sub-agent tasks
-			ReasoningEffort: mainAgent.ReasoningEffort,
-		}
-		cfgMutex.Unlock()
+	if !mainExists {
+		return cfg, fmt.Errorf("main agent not configured - please specify model in configuration file")
+	}
+	if !subExists {
+		return cfg, fmt.Errorf("sub agent not configured - please specify model in configuration file")
 	}
 	return cfg, nil
 }
@@ -246,72 +231,11 @@ func setDefaults(debug bool) {
 // setProviderDefaults configures LLM provider defaults for embedded binary.
 func setProviderDefaults() {
 	// Set API keys from environment for supported providers
-
 	logging.Info("azure openai endpoint", "endpoint", os.Getenv("AZURE_OPENAI_ENDPOINT"))
 
 	if apiKey := os.Getenv("AZURE_OPENAI_ENDPOINT"); apiKey != "" {
 		// api-key may be empty when using Entra ID credentials – that's okay
 		viper.SetDefault("providers.azure.apiKey", os.Getenv("AZURE_OPENAI_API_KEY"))
-	}
-
-	// if apiKey := os.Getenv("ANTHROPIC_API_KEY"); apiKey != "" {
-	// 	viper.SetDefault("providers.anthropic.apiKey", apiKey)
-	// }
-	// if apiKey := os.Getenv("OPENAI_API_KEY"); apiKey != "" {
-	// 	viper.SetDefault("providers.openai.apiKey", apiKey)
-	// }
-	// if apiKey := os.Getenv("GEMINI_API_KEY"); apiKey != "" {
-	// 	viper.SetDefault("providers.gemini.apiKey", apiKey)
-	// }
-	// if apiKey := os.Getenv("GROQ_API_KEY"); apiKey != "" {
-	// 	viper.SetDefault("providers.groq.apiKey", apiKey)
-	// }
-	// if apiKey := os.Getenv("OPENROUTER_API_KEY"); apiKey != "" {
-	// 	viper.SetDefault("providers.openrouter.apiKey", apiKey)
-	// }
-
-	// Set default model based on available providers (priority order)
-	if key := viper.GetString("providers.anthropic.apiKey"); strings.TrimSpace(key) != "" {
-		viper.SetDefault("agents.main.model", models.Claude4Sonnet)
-		return
-	}
-
-	if key := viper.GetString("providers.openai.apiKey"); strings.TrimSpace(key) != "" {
-		viper.SetDefault("agents.main.model", models.GPT41)
-		return
-	}
-
-	if key := viper.GetString("providers.gemini.apiKey"); strings.TrimSpace(key) != "" {
-		viper.SetDefault("agents.main.model", models.Gemini25Flash)
-		return
-	}
-
-	if key := viper.GetString("providers.groq.apiKey"); strings.TrimSpace(key) != "" {
-		viper.SetDefault("agents.main.model", models.QWENQwq)
-		return
-	}
-
-	if key := viper.GetString("providers.openrouter.apiKey"); strings.TrimSpace(key) != "" {
-		viper.SetDefault("agents.main.model", models.OpenRouterClaude37Sonnet)
-		return
-	}
-
-	// AWS Bedrock configuration
-	if hasAWSCredentials() {
-		viper.SetDefault("agents.main.model", models.BedrockClaude37Sonnet)
-		return
-	}
-
-	// Azure OpenAI configuration
-	if os.Getenv("AZURE_OPENAI_ENDPOINT") != "" {
-		viper.SetDefault("agents.main.model", models.AzureGPT41Mini)
-		return
-	}
-
-	// Google Cloud VertexAI configuration
-	if hasVertexAICredentials() {
-		viper.SetDefault("agents.main.model", models.VertexAIGemini25)
-		return
 	}
 }
 
@@ -397,17 +321,7 @@ func validateAgent(cfg *Config, name AgentName, agent Agent) error {
 	// Check if model exists
 	model, modelExists := models.SupportedModels[agent.Model]
 	if !modelExists {
-		logging.Warn("unsupported model configured, reverting to default",
-			"agent", name,
-			"configured_model", agent.Model)
-
-		// Set default model based on available providers
-		if setDefaultModelForAgent(name) {
-			logging.Info("set default model for agent", "agent", name, "model", cfg.Agents[name].Model)
-		} else {
-			return fmt.Errorf("no valid provider available for agent %s", name)
-		}
-		return nil
+		return fmt.Errorf("unsupported model %s configured for agent %s", agent.Model, name)
 	}
 
 	// Check if provider for the model is configured
@@ -418,37 +332,17 @@ func validateAgent(cfg *Config, name AgentName, agent Agent) error {
 		// Provider not configured, check if we have environment variables
 		apiKey := getProviderAPIKey(provider)
 		if apiKey == "" {
-			logging.Warn("provider not configured for model, reverting to default",
-				"agent", name,
-				"model", agent.Model,
-				"provider", provider)
-
-			// Set default model based on available providers
-			if setDefaultModelForAgent(name) {
-				logging.Info("set default model for agent", "agent", name, "model", cfg.Agents[name].Model)
-			} else {
-				return fmt.Errorf("no valid provider available for agent %s", name)
-			}
-		} else {
-			// Add provider with API key from environment
-			cfg.Providers[provider] = Provider{
-				APIKey: apiKey,
-			}
-			logging.Info("added provider from environment", "provider", provider)
+			return fmt.Errorf("provider %s not configured for agent %s (model %s) and no API key found in environment", provider, name, agent.Model)
 		}
-	} else if providerCfg.Disabled || providerCfg.APIKey == "" {
-		// Provider is disabled or has no API key
-		logging.Warn("provider is disabled or has no API key, reverting to default",
-			"agent", name,
-			"model", agent.Model,
-			"provider", provider)
-
-		// Set default model based on available providers
-		if setDefaultModelForAgent(name) {
-			logging.Info("set default model for agent", "agent", name, "model", cfg.Agents[name].Model)
-		} else {
-			return fmt.Errorf("no valid provider available for agent %s", name)
+		// Add provider with API key from environment
+		cfg.Providers[provider] = Provider{
+			APIKey: apiKey,
 		}
+		logging.Info("added provider from environment", "provider", provider)
+	} else if providerCfg.Disabled {
+		return fmt.Errorf("provider %s is disabled for agent %s (model %s)", provider, name, agent.Model)
+	} else if providerCfg.APIKey == "" {
+		return fmt.Errorf("provider %s has no API key configured for agent %s (model %s)", provider, name, agent.Model)
 	}
 
 	logging.Info("Selected provider", "agent", name, "model", agent.Model, "provider", provider)
@@ -600,99 +494,6 @@ func getProviderAPIKey(provider models.ModelProvider) string {
 	return ""
 }
 
-// setDefaultModelForAgent sets a default model for agents based on available providers
-func setDefaultModelForAgent(agent AgentName) bool {
-	// Set token limit based on agent type
-	maxTokens := int64(4096)
-	if agent == AgentSub {
-		maxTokens = 2048 // Lower token limit for sub-agents
-	}
-	
-	// Check providers in order of preference
-	if apiKey := os.Getenv("ANTHROPIC_API_KEY"); apiKey != "" {
-		cfgMutex.Lock()
-		cfg.Agents[agent] = Agent{
-			Model:     models.Claude4Sonnet,
-			MaxTokens: maxTokens,
-		}
-		cfgMutex.Unlock()
-		return true
-	}
-
-	if apiKey := os.Getenv("OPENAI_API_KEY"); apiKey != "" {
-		cfgMutex.Lock()
-		cfg.Agents[agent] = Agent{
-			Model:           models.GPT41,
-			MaxTokens:       maxTokens,
-			ReasoningEffort: "medium",
-		}
-		cfgMutex.Unlock()
-		return true
-	}
-
-	if apiKey := os.Getenv("GEMINI_API_KEY"); apiKey != "" {
-		cfgMutex.Lock()
-		cfg.Agents[agent] = Agent{
-			Model:     models.Gemini25Flash,
-			MaxTokens: maxTokens,
-		}
-		cfgMutex.Unlock()
-		return true
-	}
-
-	if apiKey := os.Getenv("GROQ_API_KEY"); apiKey != "" {
-		cfgMutex.Lock()
-		cfg.Agents[agent] = Agent{
-			Model:     models.QWENQwq,
-			MaxTokens: maxTokens,
-		}
-		cfgMutex.Unlock()
-		return true
-	}
-
-	if apiKey := os.Getenv("OPENROUTER_API_KEY"); apiKey != "" {
-		cfgMutex.Lock()
-		cfg.Agents[agent] = Agent{
-			Model:     models.OpenRouterClaude37Sonnet,
-			MaxTokens: maxTokens,
-		}
-		cfgMutex.Unlock()
-		return true
-	}
-
-	if hasAWSCredentials() {
-		cfgMutex.Lock()
-		cfg.Agents[agent] = Agent{
-			Model:     models.BedrockClaude37Sonnet,
-			MaxTokens: maxTokens,
-		}
-		cfgMutex.Unlock()
-		return true
-	}
-
-	if os.Getenv("AZURE_OPENAI_ENDPOINT") != "" {
-		cfgMutex.Lock()
-		cfg.Agents[agent] = Agent{
-			Model:           models.AzureGPT41Mini,
-			MaxTokens:       maxTokens,
-			ReasoningEffort: "medium",
-		}
-		cfgMutex.Unlock()
-		return true
-	}
-
-	if hasVertexAICredentials() {
-		cfgMutex.Lock()
-		cfg.Agents[agent] = Agent{
-			Model:     models.VertexAIGemini25,
-			MaxTokens: maxTokens,
-		}
-		cfgMutex.Unlock()
-		return true
-	}
-
-	return false
-}
 
 func updateCfgFile(updateCfg func(config *Config)) error {
 	if cfg == nil {

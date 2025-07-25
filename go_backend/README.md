@@ -161,23 +161,6 @@ curl -N -H "Accept: text/event-stream" \
 
 ### Native Integration Examples
 
-#### Swift/macOS Integration
-
-**Via CLI:**
-```swift
-// Get sessions data for Swift app
-let process = Process()
-process.executableURL = URL(fileURLWithPath: "./build/go_general_agent")
-process.arguments = ["--query", "sessions", "--output-format", "json"]
-
-let pipe = Pipe()
-process.standardOutput = pipe
-process.launch()
-
-let data = pipe.fileHandleForReading.readDataToEndOfFile()
-let sessions = try JSONDecoder().decode([SessionData].self, from: data)
-```
-
 **Via HTTP:**
 ```swift
 // HTTP JSON-RPC request from Swift
