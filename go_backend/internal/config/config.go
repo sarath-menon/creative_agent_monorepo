@@ -94,6 +94,7 @@ const (
 
 // Global configuration instance
 var cfg *Config
+
 // Mutex to protect concurrent access to cfg
 var cfgMutex sync.RWMutex
 
@@ -186,7 +187,7 @@ func Load(workingDir string, debug bool) (*Config, error) {
 	_, mainExists := cfg.Agents[AgentMain]
 	_, subExists := cfg.Agents[AgentSub]
 	cfgMutex.RUnlock()
-	
+
 	if !mainExists {
 		return cfg, fmt.Errorf("main agent not configured - please specify model in configuration file")
 	}
@@ -331,17 +332,21 @@ func validateAgent(cfg *Config, name AgentName, agent Agent) error {
 	if !providerExists {
 		// Provider not configured, check if we have environment variables
 		apiKey := getProviderAPIKey(provider)
-		if apiKey == "" {
+		if apiKey == "" && provider != "anthropic" {
 			return fmt.Errorf("provider %s not configured for agent %s (model %s) and no API key found in environment", provider, name, agent.Model)
 		}
-		// Add provider with API key from environment
+		// Add provider - with API key from environment or empty for OAuth-supported providers
 		cfg.Providers[provider] = Provider{
 			APIKey: apiKey,
 		}
-		logging.Info("added provider from environment", "provider", provider)
+		if apiKey != "" {
+			logging.Info("added provider from environment", "provider", provider)
+		} else {
+			logging.Info("added provider without API key (OAuth-supported)", "provider", provider)
+		}
 	} else if providerCfg.Disabled {
 		return fmt.Errorf("provider %s is disabled for agent %s (model %s)", provider, name, agent.Model)
-	} else if providerCfg.APIKey == "" {
+	} else if providerCfg.APIKey == "" && provider != "anthropic" {
 		return fmt.Errorf("provider %s has no API key configured for agent %s (model %s)", provider, name, agent.Model)
 	}
 
@@ -454,7 +459,8 @@ func Validate() error {
 
 	// Validate providers
 	for provider, providerCfg := range cfg.Providers {
-		if providerCfg.APIKey == "" && !providerCfg.Disabled {
+		// Skip API key validation for Anthropic (supports OAuth authentication)
+		if providerCfg.APIKey == "" && !providerCfg.Disabled && provider != "anthropic" {
 			fmt.Printf("provider has no API key, marking as disabled %s", provider)
 			logging.Warn("provider has no API key, marking as disabled", "provider", provider)
 			providerCfg.Disabled = true
@@ -493,7 +499,6 @@ func getProviderAPIKey(provider models.ModelProvider) string {
 	}
 	return ""
 }
-
 
 func updateCfgFile(updateCfg func(config *Config)) error {
 	if cfg == nil {

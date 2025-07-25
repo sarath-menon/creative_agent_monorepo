@@ -2,11 +2,11 @@
   "$schema": "./opencode-schema.json",
   "agents": {
     "main": {
-      "model": "azure.gpt-4.1-mini",
+      "model": "claude-4-sonnet",
       "maxTokens": 4096
     },
     "sub": {
-      "model": "azure.gpt-4.1-mini", 
+      "model": "claude-4-sonnet", 
       "maxTokens": 2048
     }
   },

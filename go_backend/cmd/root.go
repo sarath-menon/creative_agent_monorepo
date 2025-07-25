@@ -414,4 +414,7 @@ func init() {
 	rootCmd.RegisterFlagCompletionFunc("output-format", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return format.SupportedFormats, cobra.ShellCompDirectiveNoFileComp
 	})
+
+	// Add auth subcommand
+	rootCmd.AddCommand(authCmd)
 }

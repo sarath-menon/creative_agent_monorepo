@@ -23,14 +23,17 @@ type anthropicOptions struct {
 	useBedrock   bool
 	disableCache bool
 	shouldThink  func(userMessage string) bool
+	useOAuth     bool
+	oauthCreds   *OAuthCredentials
 }
 
 type AnthropicOption func(*anthropicOptions)
 
 type anthropicClient struct {
-	providerOptions providerClientOptions
-	options         anthropicOptions
-	client          anthropic.Client
+	providerOptions   providerClientOptions
+	options           anthropicOptions
+	client            anthropic.Client
+	credentialStorage *CredentialStorage
 }
 
 type AnthropicClient ProviderClient
@@ -41,19 +44,70 @@ func newAnthropicClient(opts providerClientOptions) AnthropicClient {
 		o(&anthropicOpts)
 	}
 
-	anthropicClientOptions := []option.RequestOption{}
-	if opts.apiKey != "" {
-		anthropicClientOptions = append(anthropicClientOptions, option.WithAPIKey(opts.apiKey))
+	// Initialize credential storage
+	credStorage, err := NewCredentialStorage()
+	if err != nil {
+		logging.Warn("Failed to initialize OAuth credential storage: %v", err)
 	}
+
+	// Check for OAuth credentials first
+	var oauthCreds *OAuthCredentials
+	if credStorage != nil {
+		if creds, err := credStorage.GetOAuthCredentials("anthropic"); err == nil && creds != nil {
+			// Check if token needs refresh
+			if creds.IsTokenExpired() && creds.RefreshToken != "" {
+				logging.Info("OAuth token expired, attempting refresh...")
+				if refreshedCreds, err := RefreshAccessToken(creds); err == nil {
+					// Store refreshed credentials
+					credStorage.StoreOAuthCredentials(
+						"anthropic",
+						refreshedCreds.AccessToken,
+						refreshedCreds.RefreshToken,
+						refreshedCreds.ExpiresAt,
+						refreshedCreds.ClientID,
+					)
+					oauthCreds = refreshedCreds
+					logging.Info("OAuth token refreshed successfully")
+				} else {
+					logging.Warn("Failed to refresh OAuth token: %v", err)
+				}
+			} else if !creds.IsTokenExpired() {
+				oauthCreds = creds
+				logging.Info("Using valid OAuth credentials")
+			}
+		}
+	}
+
+	anthropicClientOptions := []option.RequestOption{}
+	
+	// Set up OAuth if available using SDK's WithAuthToken
+	if oauthCreds != nil {
+		anthropicOpts.useOAuth = true
+		anthropicOpts.oauthCreds = oauthCreds
+		// Use WithAuthToken for OAuth (sets Authorization: Bearer header)
+		anthropicClientOptions = append(anthropicClientOptions, 
+			option.WithAuthToken(oauthCreds.AccessToken),
+			option.WithHeader("anthropic-beta", "oauth-2025-04-20"),
+		)
+		logging.Info("Initialized Anthropic client with OAuth authentication via SDK")
+	} else if opts.apiKey != "" {
+		// Use WithAPIKey for API key authentication (sets x-api-key header)
+		anthropicClientOptions = append(anthropicClientOptions, option.WithAPIKey(opts.apiKey))
+		logging.Info("Initialized Anthropic client with API key authentication")
+	} else {
+		logging.Warn("No authentication method available - neither OAuth nor API key")
+	}
+
 	if anthropicOpts.useBedrock {
 		anthropicClientOptions = append(anthropicClientOptions, bedrock.WithLoadDefaultConfig(context.Background()))
 	}
 
 	client := anthropic.NewClient(anthropicClientOptions...)
 	return &anthropicClient{
-		providerOptions: opts,
-		options:         anthropicOpts,
-		client:          client,
+		providerOptions:   opts,
+		options:           anthropicOpts,
+		client:            client,
+		credentialStorage: credStorage,
 	}
 }
 
@@ -177,6 +231,32 @@ func (a *anthropicClient) preparedMessages(messages []anthropic.MessageParam, to
 		}
 	}
 
+	// Determine system message based on authentication method
+	systemMessage := a.providerOptions.systemMessage
+	if a.options.useOAuth {
+		// REQUIRED: Use Claude Code system prompt for OAuth
+		systemMessage = "You are Claude Code, Anthropic's official CLI for Claude."
+		
+		// If the original system message was different, inject it as role context
+		// This implements the role injection pattern from the reference manual
+		if a.providerOptions.systemMessage != systemMessage && a.providerOptions.systemMessage != "" {
+			roleInjectionMsg := fmt.Sprintf("For this conversation, please act as: %s", a.providerOptions.systemMessage)
+			
+			// Inject role at the beginning of the conversation if not already present
+			if len(messages) == 0 || !strings.Contains(messages[0].Content[0].OfText.Text, "For this conversation, please act as:") {
+				roleContent := anthropic.NewTextBlock(roleInjectionMsg)
+				roleMessage := anthropic.NewUserMessage(roleContent)
+				
+				// Add acknowledgment message
+				ackContent := anthropic.NewTextBlock("Understood. I'll act in that role for our conversation.")
+				ackMessage := anthropic.NewAssistantMessage(ackContent)
+				
+				// Prepend role injection messages
+				messages = append([]anthropic.MessageParam{roleMessage, ackMessage}, messages...)
+			}
+		}
+	}
+
 	return anthropic.MessageNewParams{
 		Model:       anthropic.Model(a.providerOptions.model.APIModel),
 		MaxTokens:   a.providerOptions.maxTokens,
@@ -186,7 +266,7 @@ func (a *anthropicClient) preparedMessages(messages []anthropic.MessageParam, to
 		Thinking:    thinkingParam,
 		System: []anthropic.TextBlockParam{
 			{
-				Text: a.providerOptions.systemMessage,
+				Text: systemMessage,
 				CacheControl: anthropic.CacheControlEphemeralParam{
 					Type: "ephemeral",
 				},
@@ -196,6 +276,33 @@ func (a *anthropicClient) preparedMessages(messages []anthropic.MessageParam, to
 }
 
 func (a *anthropicClient) send(ctx context.Context, messages []message.Message, tools []toolsPkg.BaseTool) (resposne *ProviderResponse, err error) {
+	// Handle proactive token refresh for OAuth
+	if a.options.useOAuth && a.options.oauthCreds != nil {
+		if a.options.oauthCreds.IsTokenExpired() && a.options.oauthCreds.RefreshToken != "" {
+			if refreshedCreds, err := RefreshAccessToken(a.options.oauthCreds); err == nil {
+				// Update stored credentials
+				if a.credentialStorage != nil {
+					a.credentialStorage.StoreOAuthCredentials(
+						"anthropic",
+						refreshedCreds.AccessToken,
+						refreshedCreds.RefreshToken,
+						refreshedCreds.ExpiresAt,
+						refreshedCreds.ClientID,
+					)
+				}
+				a.options.oauthCreds = refreshedCreds
+				
+				// Update client with new token
+				a.client = anthropic.NewClient(
+					option.WithAuthToken(refreshedCreds.AccessToken),
+					option.WithHeader("anthropic-beta", "oauth-2025-04-20"),
+				)
+				logging.Info("Refreshed OAuth token proactively")
+			}
+		}
+	}
+
+	// Use SDK for both OAuth and API key authentication
 	preparedMessages := a.preparedMessages(a.convertMessages(messages), a.convertTools(tools))
 	cfg := config.Get()
 	if cfg.Debug {
@@ -213,6 +320,32 @@ func (a *anthropicClient) send(ctx context.Context, messages []message.Message, 
 		// If there is an error we are going to see if we can retry the call
 		if err != nil {
 			logging.Error("Error in Anthropic API call", "error", err)
+			
+			// Check for 401 and try OAuth token refresh
+			if a.options.useOAuth && a.options.oauthCreds != nil && strings.Contains(err.Error(), "401") && a.options.oauthCreds.RefreshToken != "" {
+				if refreshedCreds, refreshErr := RefreshAccessToken(a.options.oauthCreds); refreshErr == nil {
+					// Update stored credentials
+					if a.credentialStorage != nil {
+						a.credentialStorage.StoreOAuthCredentials(
+							"anthropic",
+							refreshedCreds.AccessToken,
+							refreshedCreds.RefreshToken,
+							refreshedCreds.ExpiresAt,
+							refreshedCreds.ClientID,
+						)
+					}
+					a.options.oauthCreds = refreshedCreds
+					
+					// Update client with new token and retry
+					a.client = anthropic.NewClient(
+						option.WithAuthToken(refreshedCreds.AccessToken),
+						option.WithHeader("anthropic-beta", "oauth-2025-04-20"),
+					)
+					logging.Info("Refreshed OAuth token and retrying request")
+					continue
+				}
+			}
+			
 			retry, after, retryErr := a.shouldRetry(attempts, err)
 			if retryErr != nil {
 				return nil, retryErr
@@ -244,7 +377,38 @@ func (a *anthropicClient) send(ctx context.Context, messages []message.Message, 
 	}
 }
 
+
+
 func (a *anthropicClient) stream(ctx context.Context, messages []message.Message, tools []toolsPkg.BaseTool) <-chan ProviderEvent {
+	eventChan := make(chan ProviderEvent)
+	
+	// Handle proactive token refresh for OAuth
+	if a.options.useOAuth && a.options.oauthCreds != nil {
+		if a.options.oauthCreds.IsTokenExpired() && a.options.oauthCreds.RefreshToken != "" {
+			if refreshedCreds, err := RefreshAccessToken(a.options.oauthCreds); err == nil {
+				// Update stored credentials
+				if a.credentialStorage != nil {
+					a.credentialStorage.StoreOAuthCredentials(
+						"anthropic",
+						refreshedCreds.AccessToken,
+						refreshedCreds.RefreshToken,
+						refreshedCreds.ExpiresAt,
+						refreshedCreds.ClientID,
+					)
+				}
+				a.options.oauthCreds = refreshedCreds
+				
+				// Update client with new token
+				a.client = anthropic.NewClient(
+					option.WithAuthToken(refreshedCreds.AccessToken),
+					option.WithHeader("anthropic-beta", "oauth-2025-04-20"),
+				)
+				logging.Info("Refreshed OAuth token proactively for streaming")
+			}
+		}
+	}
+
+	// Use SDK for both OAuth and API key authentication
 	preparedMessages := a.preparedMessages(a.convertMessages(messages), a.convertTools(tools))
 	cfg := config.Get()
 
@@ -253,7 +417,6 @@ func (a *anthropicClient) stream(ctx context.Context, messages []message.Message
 		logging.Debug("Prepared messages", "messages", string(jsonData))
 	}
 	attempts := 0
-	eventChan := make(chan ProviderEvent)
 	go func() {
 		for {
 			attempts++
@@ -349,6 +512,32 @@ func (a *anthropicClient) stream(ctx context.Context, messages []message.Message
 				close(eventChan)
 				return
 			}
+			
+			// Check for 401 and try OAuth token refresh
+			if a.options.useOAuth && a.options.oauthCreds != nil && strings.Contains(err.Error(), "401") && a.options.oauthCreds.RefreshToken != "" {
+				if refreshedCreds, refreshErr := RefreshAccessToken(a.options.oauthCreds); refreshErr == nil {
+					// Update stored credentials
+					if a.credentialStorage != nil {
+						a.credentialStorage.StoreOAuthCredentials(
+							"anthropic",
+							refreshedCreds.AccessToken,
+							refreshedCreds.RefreshToken,
+							refreshedCreds.ExpiresAt,
+							refreshedCreds.ClientID,
+						)
+					}
+					a.options.oauthCreds = refreshedCreds
+					
+					// Update client with new token and retry
+					a.client = anthropic.NewClient(
+						option.WithAuthToken(refreshedCreds.AccessToken),
+						option.WithHeader("anthropic-beta", "oauth-2025-04-20"),
+					)
+					logging.Info("Refreshed OAuth token and retrying streaming request")
+					continue
+				}
+			}
+			
 			// If there is an error we are going to see if we can retry the call
 			retry, after, retryErr := a.shouldRetry(attempts, err)
 			if retryErr != nil {
@@ -459,3 +648,5 @@ func WithAnthropicShouldThinkFn(fn func(string) bool) AnthropicOption {
 		options.shouldThink = fn
 	}
 }
+
+
