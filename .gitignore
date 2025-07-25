@@ -34,6 +34,7 @@ build/
 *.app
 *.dmg
 *.pkg
+*.__pycache__
 
 # Logs
 *.log
@@ -67,3 +68,6 @@ tmp/
 temp/
 *.tmp
 *.temp
+
+
+tools/

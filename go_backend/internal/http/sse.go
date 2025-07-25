@@ -91,18 +91,17 @@ func queueMessage(sessionID, content string) {
 	queue, exists := sessionQueues[sessionID]
 	if !exists {
 		queuesMutex.RUnlock()
-		fmt.Printf("[SSE Queue] No queue exists for session %s, message dropped. Content preview: %.50s...\n", sessionID, content)
+		fmt.Printf("[SSE Queue] No queue exists for session %s, message dropped\n", sessionID)
 		return
 	}
 	
 	// Hold read lock during entire channel operation to prevent cleanup race
 	select {
 	case queue <- content:
-		queueLen := len(queue)
-		fmt.Printf("[SSE Queue] Message added to queue for session %s. Queue length: %d. Content preview: %.50s...\n", sessionID, queueLen, content)
+		// Message queued successfully - no log needed for normal operation
 	default:
 		queueLen := len(queue)
-		fmt.Printf("[SSE Queue] Queue full for session %s! Message dropped. Queue length: %d. Content preview: %.50s...\n", sessionID, queueLen, content)
+		fmt.Printf("[SSE Queue] Queue full for session %s! Message dropped. Queue length: %d\n", sessionID, queueLen)
 	}
 	
 	queuesMutex.RUnlock()
@@ -271,17 +270,12 @@ func HandleSSEStream(ctx context.Context, handler *api.QueryHandler, w http.Resp
 			case <-pauseCh:
 				// Session paused, set flag and continue loop
 				isPaused = true
-				fmt.Printf("[SSE Pause] Session %s paused, blocking message processing\n", sessionID)
 				
 			case content, ok := <-messageQueue:
 				if !ok {
 					// Queue closed, end connection
-					fmt.Printf("[SSE Queue] Message queue closed for session %s, ending connection\n", sessionID)
 					return
 				}
-				
-				remainingLen := getQueueLength(sessionID)
-				fmt.Printf("[SSE Queue] Processing message from queue for session %s. Remaining queue length: %d. Content preview: %.50s...\n", sessionID, remainingLen, content)
 				
 				// Process the message
 				if err := processMessage(ctx, handler, w, flusher, sessionID, content); err != nil {

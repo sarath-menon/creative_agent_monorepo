@@ -47,12 +47,9 @@ export function usePersistentSSE(sessionId: string): PersistentSSEHook {
   // Establish persistent connection when sessionId changes
   useEffect(() => {
     if (!sessionId || sessionId === currentSessionRef.current) return;
-
-    console.log('Setting up persistent SSE for session:', sessionId);
     
     // Clean up previous connection
     if (eventSourceRef.current) {
-      console.log('Closing previous SSE connection');
       eventSourceRef.current.close();
       eventSourceRef.current = null;
     }
@@ -73,18 +70,15 @@ export function usePersistentSSE(sessionId: string): PersistentSSEHook {
     currentSessionRef.current = sessionId;
 
     const url = `http://localhost:8088/stream?sessionId=${encodeURIComponent(sessionId)}`;
-    console.log('Connecting persistent SSE to:', url);
     
     const eventSource = new EventSource(url);
     eventSourceRef.current = eventSource;
 
     eventSource.addEventListener('connected', (event) => {
-      console.log('Persistent SSE connected event:', event.data);
       setState(prev => ({ ...prev, connected: true, connecting: false }));
     });
 
     eventSource.addEventListener('tool', (event) => {
-      console.log('Persistent SSE tool event:', event.data);
       try {
         const data = JSON.parse(event.data);
         
@@ -137,7 +131,6 @@ export function usePersistentSSE(sessionId: string): PersistentSSEHook {
     });
 
     eventSource.addEventListener('error', (event) => {
-      console.log('Persistent SSE error event (from backend):', event);
       // Backend-sent error events have JSON data
       if (event.data) {
         try {
@@ -162,18 +155,14 @@ export function usePersistentSSE(sessionId: string): PersistentSSEHook {
     });
 
     eventSource.onerror = (event) => {
-      console.log('Persistent SSE connection state change:', event);
-      
       // For persistent connections, we want to be more resilient to temporary drops
       if (eventSource.readyState === EventSource.CLOSED) {
-        console.log('Persistent SSE connection closed, will attempt to reconnect');
         setState(prev => ({ 
           ...prev, 
           connected: false,
           connecting: true // Try to reconnect
         }));
       } else if (eventSource.readyState === EventSource.CONNECTING) {
-        console.log('Persistent SSE reconnecting...');
         setState(prev => ({ 
           ...prev, 
           connected: false,
@@ -185,7 +174,6 @@ export function usePersistentSSE(sessionId: string): PersistentSSEHook {
 
     // Cleanup function
     return () => {
-      console.log('Cleaning up persistent SSE connection');
       if (eventSourceRef.current) {
         eventSourceRef.current.close();
         eventSourceRef.current = null;
@@ -197,7 +185,6 @@ export function usePersistentSSE(sessionId: string): PersistentSSEHook {
   // Cleanup on component unmount
   useEffect(() => {
     return () => {
-      console.log('Component unmounting - cleaning up persistent SSE connection');
       if (eventSourceRef.current) {
         eventSourceRef.current.close();
         eventSourceRef.current = null;
@@ -277,7 +264,6 @@ export function usePersistentSSE(sessionId: string): PersistentSSEHook {
       }
 
       const result = await response.json();
-      console.log('Session paused:', result);
       
       setState(prev => ({
         ...prev,
@@ -313,7 +299,6 @@ export function usePersistentSSE(sessionId: string): PersistentSSEHook {
       }
 
       const result = await response.json();
-      console.log('Session resumed:', result);
       
       setState(prev => ({
         ...prev,

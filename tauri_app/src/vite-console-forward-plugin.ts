@@ -26,9 +26,13 @@ export interface ConsoleForwardOptions {
    */
   endpoint?: string;
   /**
-   * Console levels to forward (default: ['log', 'warn', 'error', 'info', 'debug'])
+   * Console levels to forward (default: ['warn', 'error'])
    */
   levels?: ("log" | "warn" | "error" | "info" | "debug")[];
+  /**
+   * Minimum level for forwarding logs (default: 'warn')
+   */
+  minLevel?: "log" | "info" | "warn" | "error";
 }
 
 const logger = createLogger("info", {
@@ -41,8 +45,13 @@ export function consoleForwardPlugin(
   const {
     enabled = true,
     endpoint = "/api/debug/client-logs",
-    levels = ["log", "warn", "error", "info", "debug"],
+    levels = ["warn", "error"],
+    minLevel = "warn",
   } = options;
+
+  // Define level hierarchy for filtering
+  const levelHierarchy = { log: 0, info: 1, warn: 2, error: 3 };
+  const minLevelValue = levelHierarchy[minLevel] || 2;
 
   const virtualModuleId = "virtual:console-forward";
   const resolvedVirtualModuleId = "\0" + virtualModuleId;
@@ -96,8 +105,9 @@ const originalMethods = {
 
 const logBuffer = [];
 let flushTimeout = null;
-const FLUSH_DELAY = 100;
-const MAX_BUFFER_SIZE = 50;
+const FLUSH_DELAY = 500; // Reduced frequency for non-error logs
+const ERROR_FLUSH_DELAY = 100; // Fast flush for errors
+const MAX_BUFFER_SIZE = 20; // Smaller buffer
 
 function createLogEntry(level, args) {
   const stacks = [];
@@ -165,13 +175,25 @@ function flushLogs() {
 }
 
 function addToBuffer(entry) {
+  // Filter by minimum level
+  const entryLevel = levelHierarchy[entry.level] || 0;
+  if (entryLevel < minLevelValue) {
+    return; // Skip logs below minimum level
+  }
+  
   logBuffer.push(entry);
-  if (logBuffer.length >= MAX_BUFFER_SIZE) {
+  
+  // Immediate flush for errors, or when buffer is full
+  if (entry.level === 'error' || logBuffer.length >= MAX_BUFFER_SIZE) {
     flushLogs();
     return;
   }
+  
+  // Use different delays based on log level
+  const delay = entry.level === 'warn' ? ERROR_FLUSH_DELAY : FLUSH_DELAY;
+  
   if (!flushTimeout) {
-    flushTimeout = setTimeout(flushLogs, FLUSH_DELAY);
+    flushTimeout = setTimeout(flushLogs, delay);
   }
 }
 
@@ -189,7 +211,8 @@ console.${level} = function(...args) {
 
 // Cleanup handlers
 window.addEventListener("beforeunload", flushLogs);
-setInterval(flushLogs, 10000);
+// Reduced interval for periodic flushing
+setInterval(flushLogs, 30000);
 
 export default { flushLogs };
         `;
