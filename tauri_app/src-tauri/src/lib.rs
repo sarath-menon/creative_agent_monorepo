@@ -78,7 +78,7 @@ pub fn run() {
         .setup(move |app| {
             // Create the main window programmatically
             let win_builder = WebviewWindowBuilder::new(app, "main", WebviewUrl::default())
-                .title("recreate_tauri_app")
+                .title("")
                 .inner_size(500.0, 600.0)
                 .max_inner_size(500.0, 700.0)
                 .min_inner_size(500.0, 600.0);

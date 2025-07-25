@@ -29,9 +29,12 @@ import {
   type AIToolStatus,
 } from '@/components/ui/kibo-ui/ai/tool';
 import { GlobeIcon, MicIcon, PlusIcon, Play, Square, Command, HelpCircle, FileIcon, FolderIcon } from 'lucide-react';
+import { IconEdit } from '@tabler/icons-react';
 import { type FormEventHandler, useState, useEffect, useRef } from 'react';
+import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
-import { useSession } from '@/hooks/useSession';
+import { useSession, useCreateSession } from '@/hooks/useSession';
 import { useSendMessage } from '@/hooks/useMessages';
 import { usePersistentSSE } from '@/hooks/usePersistentSSE';
 import { useFileSystem, type FileEntry } from '@/hooks/useFileSystem';
@@ -77,6 +80,7 @@ export function ChatApp() {
   const interruptedMessageAddedRef = useRef(false);
 
   const { data: session, isLoading: sessionLoading, error: sessionError } = useSession();
+  const createSession = useCreateSession();
   const sendMessage = useSendMessage();
   const sseStream = usePersistentSSE(session?.id || '');
   const { currentFiles, isLoading: filesLoading, error: filesError } = useFileSystem();
@@ -268,6 +272,18 @@ export function ChatApp() {
     }
   };
 
+  // Handle new session creation
+  const handleNewSession = async () => {
+    try {
+      await createSession.mutateAsync({ title: "Chat Session" });
+      setMessages([]);
+      setText('');
+      interruptedMessageAddedRef.current = false;
+    } catch (error) {
+      console.error('Failed to create new session:', error);
+    }
+  };
+
   // Calculate submit button status and disabled state
   const buttonStatus = sseStream.isPaused ? 'paused' : 
                       sseStream.processing ? 'streaming' : 
@@ -279,7 +295,19 @@ export function ChatApp() {
     : (!session?.id || sessionLoading || !sseStream.connected);
 
   return (
-    <div className="flex flex-col h-screen p-4 gap-4">
+    <div className="flex flex-col h-screen px-4 pb-4 gap-4">
+      {/* Header with New Session Button */}
+      <div className="flex justify-end">
+        <button
+          onClick={handleNewSession}
+          disabled={createSession.isPending}
+          className="flex items-center gap-2  text-sm font-medium text-stone-500 hover:text-stone-100 hover:bg-stone-700/50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          title="Start New Session"
+        >
+          <IconEdit className="size-5" />
+        </button>
+      </div>
+      
       {/* Conversation Display */}
       <AIConversation className="relative h-full">
         <AIConversationContent>

@@ -527,7 +527,7 @@ func (a *agent) processEvent(ctx context.Context, sessionID string, assistantMsg
 
 	switch event.Type {
 	case provider.EventThinkingDelta:
-		logging.Info("[Agent Event] Thinking delta received for session %s. Length: %d\n", sessionID, len(event.Content))
+		// logging.Info("[Agent Event] Thinking delta received for session %s. Length: %d\n", sessionID, len(event.Content))
 		assistantMsg.AppendReasoningContent(event.Content)
 		// Publish thinking event for real-time streaming
 		a.Publish(pubsub.CreatedEvent, AgentEvent{
