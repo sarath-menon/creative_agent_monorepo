@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"go_general_agent/internal/config"
@@ -91,11 +92,15 @@ func (b *blenderTool) Run(ctx context.Context, call ToolCall) (ToolResponse, err
 	return b.executor(ctx, pythonCode)
 }
 
+func getPythonToolsPath() string {
+	return filepath.Join(config.WorkingDirectory(), "tools")
+}
+
 func generatePythonCode(functionName string, parameters map[string]any) string {
 	var code strings.Builder
 	
 	code.WriteString("import sys, json\n")
-	code.WriteString("sys.path.insert(0, \"/Users/sarathmenon/Documents/startup/image_generation/image_gen_monorepo/python_backend/src\")\n")
+	code.WriteString(fmt.Sprintf("sys.path.insert(0, %q)\n", getPythonToolsPath()))
 	code.WriteString(fmt.Sprintf("from tools.blender import %s\n", functionName))
 	
 	if len(parameters) > 0 {

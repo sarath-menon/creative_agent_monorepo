@@ -23,9 +23,10 @@ func CoderAgentTools(
 	ctx := context.Background()
 	otherTools := GetMcpTools(ctx, permissions)
 	blenderExecutor := createBlenderExecutor()
+	bashTool := tools.NewBashTool(permissions)
 	return append(
 		[]tools.BaseTool{
-			tools.NewBashTool(permissions),
+			bashTool,
 			tools.NewEditTool(permissions, history),
 			tools.NewFetchTool(permissions),
 			tools.NewGlobTool(),
@@ -34,6 +35,7 @@ func CoderAgentTools(
 			tools.NewViewTool(),
 			tools.NewWriteTool(permissions, history),
 			tools.NewBlenderTool(permissions, blenderExecutor),
+			tools.NewPixelmatorTool(permissions, bashTool),
 			NewAgentTool(sessions, messages),
 		}, otherTools...,
 	)

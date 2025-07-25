@@ -50,3 +50,5 @@ build-errors.log
 
 opencode
 opencode.md
+
+tools/blender/__pycache__
