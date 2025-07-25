@@ -78,6 +78,10 @@ export function usePersistentSSE(sessionId: string): PersistentSSEHook {
       setState(prev => ({ ...prev, connected: true, connecting: false }));
     });
 
+    eventSource.addEventListener('heartbeat', (event) => {
+      // Heartbeat events keep connection alive - no UI state changes needed
+    });
+
     eventSource.addEventListener('tool', (event) => {
       try {
         const data = JSON.parse(event.data);

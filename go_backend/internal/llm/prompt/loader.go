@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"time"
 
 	"go_general_agent/internal/config"
 	"go_general_agent/internal/llm/tools"
@@ -31,7 +30,7 @@ func LoadPromptWithVars(name string, vars map[string]string) string {
 	}
 
 	result := string(content)
-	
+
 	// Replace $<name> placeholders with values
 	if vars != nil {
 		for key, value := range vars {
@@ -39,7 +38,7 @@ func LoadPromptWithVars(name string, vars map[string]string) string {
 			result = strings.ReplaceAll(result, placeholder, value)
 		}
 	}
-	
+
 	return strings.TrimSpace(result)
 }
 
@@ -48,16 +47,14 @@ func getStandardVars() map[string]string {
 	cwd := config.WorkingDirectory()
 	isGit := isGitRepo(cwd)
 	platform := runtime.GOOS
-	date := time.Now().Format("1/2/2006")
 	ls := tools.NewLsTool()
 	r, _ := ls.Run(context.Background(), tools.ToolCall{
 		Input: `{"path":"."}`,
 	})
-	
+
 	return map[string]string{
 		"workdir":     cwd,
 		"platform":    platform,
-		"date":        date,
 		"is_git_repo": boolToYesNo(isGit),
 		"project_ls":  r.Content,
 	}
@@ -70,7 +67,7 @@ func LoadPromptWithStandardVars(name string, customVars map[string]string) strin
 	for k, v := range customVars {
 		allVars[k] = v
 	}
-	
+
 	return LoadPromptWithVars(name, allVars)
 }
 

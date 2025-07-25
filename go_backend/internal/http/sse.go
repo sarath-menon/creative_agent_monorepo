@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	"go_general_agent/internal/api"
 	"go_general_agent/internal/commands"
@@ -245,6 +246,10 @@ func HandleSSEStream(ctx context.Context, handler *api.QueryHandler, w http.Resp
 	// Track whether we're currently paused
 	isPaused := isSessionPaused(sessionID)
 
+	// Create heartbeat ticker to prevent browser timeout
+	heartbeat := time.NewTicker(45 * time.Second)
+	defer heartbeat.Stop()
+
 	// Keep connection alive and process messages from queue
 	for {
 		if isPaused {
@@ -258,6 +263,10 @@ func HandleSSEStream(ctx context.Context, handler *api.QueryHandler, w http.Resp
 				// Session resumed, continue processing
 				isPaused = false
 				fmt.Printf("[SSE Pause] Session %s resumed, continuing message processing\n", sessionID)
+			case <-heartbeat.C:
+				// Send heartbeat to keep connection alive
+				fmt.Fprintf(w, "event: heartbeat\ndata: {\"type\":\"ping\"}\n\n")
+				flusher.Flush()
 			}
 		} else {
 			// Session is not paused, process messages normally
@@ -270,6 +279,11 @@ func HandleSSEStream(ctx context.Context, handler *api.QueryHandler, w http.Resp
 			case <-pauseCh:
 				// Session paused, set flag and continue loop
 				isPaused = true
+				
+			case <-heartbeat.C:
+				// Send heartbeat to keep connection alive
+				fmt.Fprintf(w, "event: heartbeat\ndata: {\"type\":\"ping\"}\n\n")
+				flusher.Flush()
 				
 			case content, ok := <-messageQueue:
 				if !ok {
