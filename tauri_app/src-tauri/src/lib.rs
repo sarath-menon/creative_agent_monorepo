@@ -1,8 +1,9 @@
-mod sidecar;
+// mod sidecar;
+// use sidecar::SidecarManager;
 
 use objc2::runtime::Object;
 use objc2_app_kit::{NSColor, NSWindow};
-use sidecar::SidecarManager;
+
 use std::sync::Arc;
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
@@ -58,10 +59,11 @@ fn greet(name: &str) -> String {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let sidecar_manager = Arc::new(SidecarManager::new());
+    // let sidecar_manager = Arc::new(SidecarManager::new());
 
     tauri::Builder::default()
-        .manage(sidecar_manager.clone())
+        .plugin(tauri_plugin_fs::init())
+        // .manage(sidecar_manager.clone())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
         .invoke_handler(tauri::generate_handler![
@@ -99,10 +101,10 @@ pub fn run() {
             }
 
             let app_handle = app.handle().clone();
-            let manager = sidecar_manager.clone();
+            // let manager = sidecar_manager.clone();
 
             // Clone for auto-start
-            let startup_manager = manager.clone();
+            // let startup_manager = manager.clone();
             let startup_handle = app_handle.clone();
 
             // Auto-start sidecar on app launch
@@ -129,12 +131,12 @@ pub fn run() {
             let quit_item = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
             let show_item = MenuItem::with_id(app, "show", "Show", true, None::<&str>)?;
             let hide_item = MenuItem::with_id(app, "hide", "Hide", true, None::<&str>)?;
-            let sidecar_status_item =
-                MenuItem::with_id(app, "sidecar_status", "Sidecar Status", true, None::<&str>)?;
+            // let sidecar_status_item =
+            //     MenuItem::with_id(app, "sidecar_status", "Sidecar Status", true, None::<&str>)?;
 
             let tray_menu = Menu::with_items(
                 app,
-                &[&show_item, &hide_item, &sidecar_status_item, &quit_item],
+                &[&show_item, &hide_item, &quit_item],
             )?;
 
             let _tray = TrayIconBuilder::new()
@@ -158,10 +160,6 @@ pub fn run() {
                         if let Some(window) = app.get_webview_window("main") {
                             let _ = window.hide();
                         }
-                    }
-                    "sidecar_status" => {
-                        println!("Sidecar status menu item clicked");
-                        // You could show a notification or status dialog here
                     }
                     _ => {
                         println!("Unhandled menu item: {:?}", event.id);

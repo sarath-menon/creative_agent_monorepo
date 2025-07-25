@@ -28,12 +28,13 @@ import {
   AIToolStep,
   type AIToolStatus,
 } from '@/components/ui/kibo-ui/ai/tool';
-import { GlobeIcon, MicIcon, PlusIcon, Play, Square, Command, HelpCircle } from 'lucide-react';
+import { GlobeIcon, MicIcon, PlusIcon, Play, Square, Command, HelpCircle, FileIcon, FolderIcon } from 'lucide-react';
 import { type FormEventHandler, useState, useEffect, useRef } from 'react';
 
 import { useSession } from '@/hooks/useSession';
 import { useSendMessage } from '@/hooks/useMessages';
 import { usePersistentSSE } from '@/hooks/usePersistentSSE';
+import { useFileSystem, type FileEntry } from '@/hooks/useFileSystem';
 import { LoadingDots } from './loading-dots';
 
 
@@ -70,12 +71,15 @@ export function ChatApp() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [showSlashCommands, setShowSlashCommands] = useState(false);
   const [selectedCommandIndex, setSelectedCommandIndex] = useState(0);
+  const [showFileReferences, setShowFileReferences] = useState(false);
+  const [selectedFileIndex, setSelectedFileIndex] = useState(0);
   const [inputElement, setInputElement] = useState<HTMLTextAreaElement | null>(null);
   const interruptedMessageAddedRef = useRef(false);
 
   const { data: session, isLoading: sessionLoading, error: sessionError } = useSession();
   const sendMessage = useSendMessage();
   const sseStream = usePersistentSSE(session?.id || '');
+  const { currentFiles, isLoading: filesLoading, error: filesError } = useFileSystem();
 
   const handleTextChange = (value: string) => {
     setText(value);
@@ -84,8 +88,20 @@ export function ChatApp() {
     if (value === '/' || (value.startsWith('/') && !value.includes(' '))) {
       setShowSlashCommands(true);
       setSelectedCommandIndex(0);
+      setShowFileReferences(false);
     } else {
       setShowSlashCommands(false);
+    }
+    
+    // Check if user typed "@" to reference files
+    const words = value.split(' ');
+    const lastWord = words[words.length - 1];
+    if (lastWord === '@' || (lastWord.startsWith('@') && !lastWord.includes('/'))) {
+      setShowFileReferences(true);
+      setSelectedFileIndex(0);
+      setShowSlashCommands(false);
+    } else if (!lastWord.startsWith('@')) {
+      setShowFileReferences(false);
     }
   };
 
@@ -93,6 +109,21 @@ export function ChatApp() {
     const commandText = `/${command.name} `;
     setText(commandText);
     setShowSlashCommands(false);
+    inputElement?.focus();
+  };
+
+  const handleFileSelect = (file: FileEntry) => {
+    const words = text.split(' ');
+    const lastWordIndex = words.length - 1;
+    const lastWord = words[lastWordIndex];
+    
+    if (lastWord.startsWith('@')) {
+      // Replace the @partial with @filename
+      words[lastWordIndex] = `@${file.path} `;
+      setText(words.join(' '));
+    }
+    
+    setShowFileReferences(false);
     inputElement?.focus();
   };
 
@@ -129,6 +160,32 @@ export function ChatApp() {
         case 'Escape':
           e.preventDefault();
           setShowSlashCommands(false);
+          break;
+      }
+    }
+
+    // Handle file reference navigation when dropdown is visible
+    if (showFileReferences && currentFiles.length > 0) {
+      switch (e.key) {
+        case 'ArrowDown':
+          e.preventDefault();
+          setSelectedFileIndex((prev) => 
+            prev < currentFiles.length - 1 ? prev + 1 : 0
+          );
+          break;
+        case 'ArrowUp':
+          e.preventDefault();
+          setSelectedFileIndex((prev) => 
+            prev > 0 ? prev - 1 : currentFiles.length - 1
+          );
+          break;
+        case 'Enter':
+          e.preventDefault();
+          handleFileSelect(currentFiles[selectedFileIndex]);
+          break;
+        case 'Escape':
+          e.preventDefault();
+          setShowFileReferences(false);
           break;
       }
     }
@@ -323,7 +380,9 @@ export function ChatApp() {
                 ? text.includes(' ') 
                   ? 'text-green-400' // Completed slash command
                   : 'text-blue-400'  // Typing slash command
-                : ''
+                : text.includes('@') 
+                  ? 'text-purple-400' // File reference
+                  : ''
             } />
           <AIInputToolbar>
             <AIInputTools>
@@ -367,6 +426,57 @@ export function ChatApp() {
                 </div>
               );
             })}
+          </div>
+        )}
+
+        {/* File Reference Dropdown */}
+        {showFileReferences && (
+          <div className="absolute bottom-full left-0 right-0 mb-2 bg-popover border border-border rounded-xl shadow-lg z-50 overflow-hidden p-2 max-h-64 overflow-y-auto">
+            <div className="text-xs text-muted-foreground px-3 py-1 border-b mb-2">
+              <div>
+                Files ({currentFiles.length}) | Dirs: {currentFiles.filter(f => f.isDirectory).length}
+                {filesLoading ? ' | Loading...' : filesError ? ' | Error!' : ''}
+              </div>
+            </div>
+            {filesLoading ? (
+              <div className="flex items-center gap-3 px-3 py-2 text-muted-foreground">
+                <FileIcon className="size-4" />
+                <span>Loading files...</span>
+              </div>
+            ) : filesError ? (
+              <div className="flex items-center gap-3 px-3 py-2 text-red-500">
+                <FileIcon className="size-4" />
+                <span>Error loading files: {filesError}</span>
+              </div>
+            ) : currentFiles.length === 0 ? (
+              <div className="flex items-center gap-3 px-3 py-2 text-muted-foreground">
+                <FileIcon className="size-4" />
+                <span>No files found in directory</span>
+              </div>
+            ) : (
+              currentFiles.map((file, index) => {
+                const Icon = file.isDirectory ? FolderIcon : FileIcon;
+                return (
+                  <div
+                    key={file.path}
+                    className={`flex items-center gap-3 px-3 py-2 cursor-pointer transition-colors ${
+                      index === selectedFileIndex 
+                        ? 'bg-muted/80 rounded-md' 
+                        : 'hover:bg-muted/30'
+                    }`}
+                    onClick={() => handleFileSelect(file)}
+                  >
+                    <Icon className={`size-4 ${file.isDirectory ? 'text-blue-500' : 'text-muted-foreground'}`} />
+                    <div className="flex-1">
+                      <div className="font-medium text-sm">{file.name}</div>
+                      {file.extension && (
+                        <div className="text-xs text-muted-foreground">.{file.extension} file</div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })
+            )}
           </div>
         )}
       </div>
