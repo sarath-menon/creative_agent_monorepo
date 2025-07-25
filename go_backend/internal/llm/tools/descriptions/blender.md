@@ -1,0 +1,311 @@
+# Blender Video Editing Tool
+
+Generic Blender tool that dynamically calls any function from the tools.blender Python module within Blender's execution environment.
+
+## How to Use This Tool
+
+Provide a function name and parameters in this JSON format:
+
+```json
+{
+  "function": "function_name",
+  "parameters": {
+    "param1": "value1",
+    "param2": "value2"
+  }
+}
+```
+
+Example calls:
+```json
+{
+  "function": "add_video_sequence",
+  "parameters": {
+    "filepath": "/path/to/video.mp4",
+    "channel": 1,
+    "frame_start": 10,
+    "fit_method": "FIT"
+  }
+}
+```
+
+```json
+{
+  "function": "export_video", 
+  "parameters": {
+    "output_path": "/path/to/output.mp4",
+    "resolution": [1920, 1080],
+    "fps": 24
+  }
+}
+```
+
+## Important Rules
+
+- You MUST run the final python script within blender's execution environment as a SINGLE code block. Don't create separate files or split into multiple execution calls - each `execute_blender_code` call is stateless and variables/imports don't persist between calls.
+- You MUST use absolute file paths when working, since Blender's working directory may not match your project directory.
+- ALL functions are exposed through `tools.blender` - NEVER import from submodules.
+
+## ⚠️ Sequencer Rules
+
+- ALWAYS use **a different channel** for each clip. NEVER reuse a channel
+
+**DEFAULT: Sequential Playback (clips play one after another)**
+- **No overlapping frames** - each clip starts where previous ends
+- Calculate frame positions: `next_start = previous_start + previous_duration`
+- Example: Video1 ch1 (1-100), Video2 ch2 (101-200), Video3 ch1 (201-300) ✓
+
+**SPECIAL CASE: Layered Composition (clips play simultaneously)**
+- **Overlapping frames allowed** - higher channels composite on top
+- Only use when you want simultaneous playback (overlays, titles, etc.)
+- Example: Background ch1 (1-300), Overlay ch2 (50-150), Text ch3 (100-200) ✓
+
+## Quick Start Workflow
+
+```python
+# Check available workspaces and switch to Video Editing
+workspaces = get_available_workspaces()
+current = get_current_workspace()
+print(f"Current workspace: {current}")
+
+# Set timeline frame range
+set_frame_range(1, 300)
+frame_info = get_frame_range()
+print(f"Timeline: {frame_info['frame_start']}-{frame_info['frame_end']}")
+
+# Add background color and media to timeline
+add_color_sequence((0.1, 0.1, 0.1, 1.0), 1, 0, 300)
+add_video_sequence('/path/to/video.mp4', 2, 10)
+add_text_sequence('Hello World', 3, 50, 120, font_size=72)
+
+# Add transition between sequences
+add_transition('video1', 'video2', 'CROSS', 15)
+
+# Set playhead position and export
+set_current_frame(150)
+export_video('/path/to/output.mp4', resolution=(1920, 1080), fps=24)
+
+# Capture preview screenshot at current frame
+capture_preview_frame('/path/to/preview.png', resolution=(1920, 1080))
+```
+
+# Available Functions
+
+## Workspace Operations
+
+### get_current_workspace()
+Returns the name of the currently active Blender workspace
+
+**Returns:**
+- `str` - The workspace name (e.g., "Video Editing", "Modeling")
+
+### get_available_workspaces()
+Returns a list of all available Blender workspaces
+
+**Returns:**
+- `List[str]` - List of all workspace names
+
+## Timeline Management
+
+### get_sequences(channel=None)
+Returns timeline sequences, optionally filtered by channel
+
+**Parameters:**
+- `channel` (Optional[int]) - Channel number to filter by, None for all sequences
+
+**Returns:**
+- `List[Dict[str, Any]]` - List of sequence dictionaries with name, type, channel, frame_start, frame_end, duration, filepath, original_resolution, transform, is_resized
+
+### delete_sequence(sequence_name)
+Delete a sequence from the timeline by name
+
+**Parameters:**
+- `sequence_name` (str) - Name of the sequence to delete
+
+**Returns:**
+- `Dict[str, Any]` - Dictionary with success status, message, and deleted sequence info
+
+### get_sequence_resize_info(sequence_name)
+Get detailed resize information for a specific sequence
+
+**Parameters:**
+- `sequence_name` (str) - Name of the sequence to check
+
+**Returns:**
+- `Dict[str, Any]` - Detailed resize information with original_resolution, current_scale, effective_resolution, resize_method, fit_method, transform
+
+## Media Operations
+
+### add_image_sequence(filepath, channel, frame_start, name=None, fit_method='ORIGINAL', frame_end=None, position=None, scale=None)
+Add an image element to the timeline at specific channel and position
+
+**Parameters:**
+- `filepath` (str) - Path to image file
+- `channel` (int) - Channel number
+- `frame_start` (int) - Starting frame position
+- `name` (Optional[str]) - Sequence name
+- `fit_method` (str) - How to fit image ('ORIGINAL', 'FIT', 'FILL', 'STRETCH')
+- `frame_end` (Optional[int]) - Ending frame position (images can be extended to any duration)
+- `position` (Optional[Tuple[float, float]]) - (x, y) offset in pixels from center
+- `scale` (Optional[float]) - Uniform scale factor (1.0 = original size)
+
+**Returns:**
+- `Dict[str, Any]` - Sequence info dictionary matching get_sequences() format
+
+**Supported formats:** .jpg, .jpeg, .png, .tiff, .tif, .exr, .hdr, .bmp, .tga
+
+### add_video_sequence(filepath, channel, frame_start, name=None, fit_method='ORIGINAL', frame_end=None)
+Add a video element to the timeline at specific channel and position
+
+**Parameters:**
+- `filepath` (str) - Path to video file
+- `channel` (int) - Channel number
+- `frame_start` (int) - Starting frame position
+- `name` (Optional[str]) - Sequence name
+- `fit_method` (str) - How to fit video ('ORIGINAL', 'FIT', 'FILL', 'STRETCH')
+- `frame_end` (Optional[int]) - Ending frame position (videos can only be trimmed, not extended)
+
+**Returns:**
+- `Dict[str, Any]` - Sequence info dictionary matching get_sequences() format
+
+**Supported formats:** .mp4, .mov, .avi, .mkv, .webm, .wmv, .m4v, .flv
+
+### add_audio_sequence(filepath, channel, frame_start, name=None, frame_end=None)
+Add an audio element to the timeline at specific channel and position
+
+**Parameters:**
+- `filepath` (str) - Path to audio file
+- `channel` (int) - Channel number
+- `frame_start` (int) - Starting frame position
+- `name` (Optional[str]) - Sequence name
+- `frame_end` (Optional[int]) - Ending frame position (audio can only be trimmed, not extended)
+
+**Returns:**
+- `Dict[str, Any]` - Sequence info dictionary matching get_sequences() format
+
+**Supported formats:** .wav, .mp3, .flac, .ogg, .aac, .m4a, .wma
+
+### add_text_sequence(text, channel, frame_start, duration, name=None, font_size=50, color=(1.0, 1.0, 1.0, 1.0), location=(0, 0), use_background=False, background_color=(0.0, 0.0, 0.0, 0.8))
+Add a text element to the timeline at specific channel and position
+
+**Parameters:**
+- `text` (str) - The text content to display
+- `channel` (int) - Channel number
+- `frame_start` (int) - Starting frame position
+- `duration` (int) - Duration in frames
+- `name` (Optional[str]) - Sequence name
+- `font_size` (int) - Font size in pixels
+- `color` (Tuple[float, float, float, float]) - Text color as RGBA tuple
+- `location` (Tuple[int, int]) - Text position as (X, Y) tuple
+- `use_background` (bool) - Whether to show background behind text
+- `background_color` (Tuple[float, float, float, float]) - Background color as RGBA tuple
+
+**Returns:**
+- `Dict[str, Any]` - Text sequence info dictionary matching get_sequences() format
+
+### add_color_sequence(color, channel, frame_start, duration, name=None)
+Add a solid color element to the timeline at specific channel and position. DO NOT use it to add images.
+
+**Parameters:**
+- `color` (Tuple[float, float, float, float]) - Color as RGBA tuple (values 0.0-1.0)
+- `channel` (int) - Channel number
+- `frame_start` (int) - Starting frame position
+- `duration` (int) - Duration in frames
+- `name` (Optional[str]) - Sequence name
+
+**Returns:**
+- `Dict[str, Any]` - Color sequence info dictionary matching get_sequences() format
+
+### add_transition(sequence1_name, sequence2_name, transition_type='CROSS', duration=10, channel=None)
+Add a transition effect between two sequences on the timeline
+
+**Parameters:**
+- `sequence1_name` (str) - Name of the first sequence
+- `sequence2_name` (str) - Name of the second sequence
+- `transition_type` (str) - Type of transition ('CROSS', 'WIPE', 'GAMMA_CROSS')
+- `duration` (int) - Duration of transition in frames
+- `channel` (Optional[int]) - Channel for transition effect
+
+**Returns:**
+- `Dict[str, Any]` - Transition info dictionary matching get_sequences() format
+
+## Frame Range Operations
+
+### set_frame_range(start_frame, end_frame)
+Set the timeline frame range (start and end frames)
+
+**Parameters:**
+- `start_frame` (int) - Starting frame number for the timeline
+- `end_frame` (int) - Ending frame number for the timeline
+
+**Returns:**
+- `Dict[str, Any]` - Dictionary with success, message, frame_start, frame_end
+
+### get_frame_range()
+Get the current timeline frame range and playhead position
+
+**Returns:**
+- `Dict[str, Any]` - Dictionary with frame_start, frame_end, frame_current, total_frames
+
+### set_current_frame(frame)
+Set the current playhead position on the timeline
+
+**Parameters:**
+- `frame` (int) - Frame number to set as current position
+
+**Returns:**
+- `Dict[str, Any]` - Dictionary with success, message, frame_current, in_range
+
+### get_current_frame()
+Get the current playhead position on the timeline
+
+**Returns:**
+- `int` - Current frame number
+
+## Export Operations
+
+### export_video(output_path, frame_start=None, frame_end=None, resolution=(1920, 1080), fps=24, video_format='MPEG4', codec='H264', quality='HIGH')
+Export timeline sequences to a video file
+
+**Parameters:**
+- `output_path` (str) - Path for the output video file
+- `frame_start` (Optional[int]) - Starting frame (auto-detected if None)
+- `frame_end` (Optional[int]) - Ending frame (auto-detected if None)
+- `resolution` (Tuple[int, int]) - Video resolution as (width, height) tuple
+- `fps` (int) - Frames per second
+- `video_format` (str) - Video container format ('MPEG4', 'AVI', 'QUICKTIME', 'WEBM')
+- `codec` (str) - Video codec ('H264', 'XVID', 'THEORA', 'VP9')
+- `quality` (str) - Quality preset ('LOW', 'MEDIUM', 'HIGH', 'LOSSLESS')
+
+**Returns:**
+- `Dict[str, Any]` - Export info with output_path, frame_start, frame_end, duration, resolution, fps, file_size, success
+
+### capture_preview_frame(output_path, frame=None, resolution=(1920, 1080), format='PNG', quality=90)
+Capture a screenshot of the current preview in the video editor
+
+**Parameters:**
+- `output_path` (str) - Path for the output image file
+- `frame` (Optional[int]) - Frame number to capture (uses current frame if None)
+- `resolution` (Tuple[int, int]) - Image resolution as (width, height) tuple
+- `format` (str) - Image format ('PNG', 'JPEG', 'TIFF', 'BMP', 'TARGA')
+- `quality` (int) - Image quality for JPEG format (1-100)
+
+**Returns:**
+- `Dict[str, Any]` - Capture info with output_path, frame, resolution, format, file_size, success
+
+**Supported formats:** PNG (default), JPEG, TIFF, BMP, TARGA
+
+## Video Resize Detection
+
+To detect if a video has been resized after loading in Blender:
+
+```python
+# Check all sequences for resizing
+sequences = get_sequences()
+resized_sequences = [seq for seq in sequences if seq['is_resized']]
+
+# Get detailed info for a specific sequence
+resize_info = get_sequence_resize_info('my_video')
+if resize_info['is_resized']:
+    print(f"Video scaled from {resize_info['original_resolution']} to {resize_info['effective_resolution']}")
+```

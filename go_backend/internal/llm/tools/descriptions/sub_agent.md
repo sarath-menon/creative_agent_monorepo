@@ -1,5 +1,3 @@
-### Task Tool / Dispatch Agent
-
 Launch a new agent that has access to various tools (the specific list of tools available to the agent is dynamic). When you are searching for a keyword or file and are not confident that you will find the right match on the first try, use the Agent tool to perform the search for you. For example:
 
 When to use the Agent tool:
