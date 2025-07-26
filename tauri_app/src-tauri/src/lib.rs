@@ -4,6 +4,23 @@
 use objc2::runtime::Object;
 use objc2_app_kit::{NSColor, NSWindow};
 
+#[cfg(target_os = "macos")]
+use objc2_app_kit::NSWorkspace;
+#[cfg(target_os = "macos")]
+use cocoa::base::{id, nil};
+#[cfg(target_os = "macos")]
+use cocoa::foundation::{NSArray, NSData};
+#[cfg(target_os = "macos")]
+use objc::runtime::{YES, NO};
+#[cfg(target_os = "macos")]
+use objc::{msg_send, sel, sel_impl};
+#[cfg(target_os = "macos")]
+use std::ffi::CStr;
+#[cfg(target_os = "macos")]
+use base64::engine::general_purpose;
+#[cfg(target_os = "macos")]
+use base64::Engine;
+
 use std::sync::Arc;
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
@@ -16,6 +33,107 @@ use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut,
 #[tauri::command]
 fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
+}
+
+#[cfg(target_os = "macos")]
+#[derive(serde::Serialize)]
+struct AppInfo {
+    name: String,
+    icon_png_base64: String,
+}
+
+#[cfg(target_os = "macos")]
+#[tauri::command]
+async fn list_apps_with_icons() -> Result<Vec<AppInfo>, String> {
+    unsafe {
+        let workspace = NSWorkspace::sharedWorkspace();
+        let workspace_ptr = std::ptr::addr_of!(*workspace) as id;
+        let apps: id = msg_send![workspace_ptr, runningApplications];
+        let count = NSArray::count(apps) as isize;
+        let mut result = Vec::with_capacity(count as usize);
+
+        for i in 0..count {
+            let app: id = NSArray::objectAtIndex(apps, i.try_into().unwrap());
+            
+            // Check if app is visible (not background-only)
+            let is_hidden: bool = msg_send![app, isHidden];
+            let activation_policy: i64 = msg_send![app, activationPolicy];
+            
+            // Only include regular GUI apps (activation policy 0 = NSApplicationActivationPolicyRegular)
+            // Skip accessory apps (1) like browser plugins and prohibited apps (2) like background processes
+            if is_hidden || activation_policy != 0 {
+                continue;
+            }
+
+            // Get app name
+            let name_ns: id = msg_send![app, localizedName];
+            if name_ns == nil {
+                continue;
+            }
+            let utf8_ptr: *const std::os::raw::c_char = msg_send![name_ns, UTF8String];
+            let cname = CStr::from_ptr(utf8_ptr)
+                .to_string_lossy()
+                .into_owned();
+
+            // Skip empty names
+            if cname.is_empty() {
+                continue;
+            }
+
+            // Get app icon
+            let icon: id = msg_send![app, icon];
+            if icon == nil {
+                // Skip apps without icons
+                continue;
+            }
+
+            // Convert icon to PNG data
+            let tiff_data: id = msg_send![icon, TIFFRepresentation];
+            if tiff_data == nil {
+                continue;
+            }
+
+            // Create bitmap representation from TIFF data
+            let bitmap_rep: id = msg_send![objc::class!(NSBitmapImageRep), alloc];
+            let bitmap_rep: id = msg_send![bitmap_rep, initWithData: tiff_data];
+            if bitmap_rep == nil {
+                continue;
+            }
+
+            // Convert to PNG data (NSBitmapImageFileTypePNG = 4)
+            let png_data: id = msg_send![bitmap_rep, representationUsingType: 4u64 properties: nil];
+            if png_data == nil {
+                continue;
+            }
+
+            // Extract bytes and base64-encode
+            let bytes: *const u8 = msg_send![png_data, bytes];
+            let len: usize = msg_send![png_data, length];
+            let slice = std::slice::from_raw_parts(bytes, len);
+            let b64 = general_purpose::STANDARD.encode(slice);
+
+            result.push(AppInfo {
+                name: cname,
+                icon_png_base64: b64,
+            });
+        }
+
+        Ok(result)
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+#[derive(serde::Serialize)]
+struct AppInfo {
+    name: String,
+    icon_png_base64: String,
+}
+
+#[cfg(not(target_os = "macos"))]
+#[tauri::command]
+async fn list_apps_with_icons() -> Result<Vec<AppInfo>, String> {
+    // Return empty result on non-macOS platforms 
+    Ok(vec![])
 }
 
 // #[tauri::command]
@@ -54,7 +172,7 @@ fn greet(name: &str) -> String {
 //     prompt: String,
 //     sidecar_manager: State<'_, Arc<SidecarManager>>,
 // ) -> Result<String, String> {
-//     sidecar_manager.send_prompt(&prompt).await
+//     sidecar_manager.send_prompt(Option 1 is already implemented, but it does not work. Let's try option 2. But how to ensure that the list of apps can be fetched again after initialization? &prompt).await
 // }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -67,7 +185,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
         .invoke_handler(tauri::generate_handler![
-            greet,
+            list_apps_with_icons,
             // start_sidecar,
             // stop_sidecar,
             // sidecar_status,

@@ -38,7 +38,9 @@ import { useSession, useCreateSession } from '@/hooks/useSession';
 import { useSendMessage } from '@/hooks/useMessages';
 import { usePersistentSSE } from '@/hooks/usePersistentSSE';
 import { useFileSystem, type FileEntry } from '@/hooks/useFileSystem';
+import { useOpenApps } from '@/hooks/useOpenApps';
 import { LoadingDots } from './loading-dots';
+import { Badge } from '@/components/ui/badge';
 
 
 const models = [
@@ -83,7 +85,9 @@ export function ChatApp() {
   const createSession = useCreateSession();
   const sendMessage = useSendMessage();
   const sseStream = usePersistentSSE(session?.id || '');
-  const { currentFiles, isLoading: filesLoading, error: filesError } = useFileSystem();
+  const { currentFiles, isLoading: filesLoading, error: filesError, fetchFiles } = useFileSystem();
+  const { apps: openApps, isLoading: appsLoading, error: appsError } = useOpenApps();
+
 
   const handleTextChange = (value: string) => {
     setText(value);
@@ -104,6 +108,11 @@ export function ChatApp() {
       setShowFileReferences(true);
       setSelectedFileIndex(0);
       setShowSlashCommands(false);
+      // Trigger fresh file fetch when @ is typed
+      if (lastWord === '@') {
+        console.log('🔥 @ detected - fetching files on demand');
+        fetchFiles();
+      }
     } else if (!lastWord.startsWith('@')) {
       setShowFileReferences(false);
     }
@@ -390,6 +399,34 @@ export function ChatApp() {
         </AIConversationContent>
         <AIConversationScrollButton />
       </AIConversation>
+
+      {/* Open Apps Display */}
+      {(openApps.length > 0 || appsLoading) && (
+        <div className="max-w-4xl mx-auto w-full mb-3">
+          <div className="text-xs text-muted-foreground mb-2 px-1">
+            Open Apps {appsLoading && openApps.length === 0 ? '(loading...)' : appsLoading ? '(updating...)' : ''}
+          </div>
+          {appsLoading && openApps.length === 0 ? (
+            <div className="flex items-center gap-2 px-2 py-3 text-muted-foreground">
+              <LoadingDots />
+              <span className="text-xs">Loading applications...</span>
+            </div>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {openApps.map((app) => (
+                <Badge key={app.name} variant="secondary" className="text-xs flex items-center gap-1.5">
+                  <img 
+                    src={`data:image/png;base64,${app.icon_png_base64}`} 
+                    alt={`${app.name} icon`}
+                    className="w-4 h-4 rounded-sm"
+                  />
+                  {app.name}
+                </Badge>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* AI Input Section */}
       <div className="max-w-4xl mx-auto w-full relative">
