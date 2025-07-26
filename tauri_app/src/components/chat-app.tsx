@@ -87,6 +87,14 @@ export function ChatApp() {
   const sseStream = usePersistentSSE(session?.id || '');
   const { currentFiles, isLoading: filesLoading, error: filesError, fetchFiles } = useFileSystem();
   const { apps: openApps, isLoading: appsLoading, error: appsError } = useOpenApps();
+  
+  // Filter apps to only show specified ones
+  const allowedApps = ['Notes', 'Obsidian', 'Blender', 'Pixelmator Pro'];
+  const filteredApps = openApps.filter(app => 
+    allowedApps.some(allowedApp => 
+      app.name.toLowerCase().includes(allowedApp.toLowerCase())
+    )
+  );
 
 
   const handleTextChange = (value: string) => {
@@ -304,7 +312,7 @@ export function ChatApp() {
     : (!session?.id || sessionLoading || !sseStream.connected);
 
   return (
-    <div className="flex flex-col h-screen px-4 pb-4 gap-4">
+    <div className="flex flex-col h-screen px-4 pb-4">
       {/* Header with New Session Button */}
       <div className="flex justify-end">
         <button
@@ -401,24 +409,24 @@ export function ChatApp() {
       </AIConversation>
 
       {/* Open Apps Display */}
-      {(openApps.length > 0 || appsLoading) && (
-        <div className="max-w-4xl mx-auto w-full mb-3">
-          <div className="text-xs text-muted-foreground mb-2 px-1">
-            Open Apps {appsLoading && openApps.length === 0 ? '(loading...)' : appsLoading ? '(updating...)' : ''}
+      {(filteredApps.length > 0 || appsLoading) && (
+        <div className="max-w-4xl mx-auto w-full mb-2">
+          <div className="text-xs text-muted-foreground px-1">
+            {appsLoading && filteredApps.length === 0 ? '(loading...)' : appsLoading ? '(updating...)' : ''}
           </div>
-          {appsLoading && openApps.length === 0 ? (
+          {appsLoading && filteredApps.length === 0 ? (
             <div className="flex items-center gap-2 px-2 py-3 text-muted-foreground">
               <LoadingDots />
               <span className="text-xs">Loading applications...</span>
             </div>
           ) : (
             <div className="flex flex-wrap gap-2">
-              {openApps.map((app) => (
+              {filteredApps.map((app) => (
                 <Badge key={app.name} variant="secondary" className="text-xs flex items-center gap-1.5">
                   <img 
                     src={`data:image/png;base64,${app.icon_png_base64}`} 
                     alt={`${app.name} icon`}
-                    className="w-4 h-4 rounded-sm"
+                    className="size-4 rounded-sm"
                   />
                   {app.name}
                 </Badge>

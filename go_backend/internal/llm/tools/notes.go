@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -124,7 +125,8 @@ func (n *notesTool) getCurrentNote(ctx context.Context) (*NoteInfo, error) {
 		set selectedNotes to selection
 		if (count of selectedNotes) > 0 then
 			set currentNote to item 1 of selectedNotes
-			return {name of currentNote, plaintext of currentNote, body of currentNote, id of currentNote, creation date of currentNote, modification date of currentNote, password protected of currentNote, shared of currentNote, name of container of currentNote}
+			set noteContainer to container of currentNote
+			return {name of currentNote, plaintext of currentNote, body of currentNote, id of currentNote, creation date of currentNote, modification date of currentNote, password protected of currentNote, shared of currentNote, name of noteContainer}
 		else
 			error "No note selected"
 		end if
@@ -132,10 +134,14 @@ func (n *notesTool) getCurrentNote(ctx context.Context) (*NoteInfo, error) {
 
 	result, err := utils.ExecuteAppleScript(ctx, script)
 	if err != nil {
+		// Log the actual AppleScript error for debugging
+		log.Printf("[Notes Tool] AppleScript error in getCurrentNote: %v", err)
+		
 		if strings.Contains(err.Error(), "No note selected") {
 			return nil, fmt.Errorf("no note is currently selected in Notes app")
 		}
-		return nil, err
+		// Return the original error with context
+		return nil, fmt.Errorf("failed to get current note from Notes app: %w", err)
 	}
 
 	// Parse the comma-separated result
@@ -180,10 +186,14 @@ func (n *notesTool) getCurrentNoteHTML(ctx context.Context) (string, error) {
 
 	result, err := utils.ExecuteAppleScript(ctx, script)
 	if err != nil {
+		// Log the actual AppleScript error for debugging
+		log.Printf("[Notes Tool] AppleScript error in getCurrentNoteHTML: %v", err)
+		
 		if strings.Contains(err.Error(), "No note selected") {
 			return "", fmt.Errorf("no note is currently selected in Notes app")
 		}
-		return "", err
+		// Return the original error with context
+		return "", fmt.Errorf("failed to get current note HTML from Notes app: %w", err)
 	}
 
 	return result, nil

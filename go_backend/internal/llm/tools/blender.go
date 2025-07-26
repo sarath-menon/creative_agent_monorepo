@@ -93,7 +93,7 @@ func (b *blenderTool) Run(ctx context.Context, call ToolCall) (ToolResponse, err
 }
 
 func getPythonToolsPath() string {
-	return filepath.Join(config.WorkingDirectory(), "tools")
+	return filepath.Join(config.WorkingDirectory(), "go_backend", "tools")
 }
 
 func generatePythonCode(functionName string, parameters map[string]any) string {
@@ -101,7 +101,7 @@ func generatePythonCode(functionName string, parameters map[string]any) string {
 	
 	code.WriteString("import sys, json\n")
 	code.WriteString(fmt.Sprintf("sys.path.insert(0, %q)\n", getPythonToolsPath()))
-	code.WriteString(fmt.Sprintf("from tools.blender import %s\n", functionName))
+	code.WriteString(fmt.Sprintf("from blender import %s\n", functionName))
 	
 	if len(parameters) > 0 {
 		parametersJSON, _ := json.Marshal(parameters)
