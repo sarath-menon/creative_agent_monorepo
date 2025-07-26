@@ -15,7 +15,6 @@ interface FileSystemData {
 }
 
 const fetchFileSystemData = async (): Promise<FileSystemData> => {
-  console.log('🔍 fetchFileSystemData called - fetching file data on demand');
   try {
     // Get home directory
     const homeDir = await path.homeDir();
@@ -42,12 +41,10 @@ const fetchFileSystemData = async (): Promise<FileSystemData> => {
       .filter(entry => {
         // Filter out hidden files and common system files
         if (entry.name.startsWith('.')) {
-          console.log(`Filtering out hidden: ${entry.name}`);
           return false;
         }
         
         if (entry.isDirectory) {
-          console.log(`Including directory: ${entry.name}`);
           return true;
         }
         

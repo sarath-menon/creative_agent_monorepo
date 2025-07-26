@@ -1,30 +1,28 @@
-File viewing tool that reads and displays the contents of files with line numbers, allowing you to examine code, logs, or text data.
+Reads a file from the local filesystem. You can access any file directly by using this tool. Assume this tool is able to read all files on the machine. If the User provides a path to a file assume that path is valid. It is okay to read a file that does not exist; an error will be returned.
 
-WHEN TO USE THIS TOOL:
-- Use when you need to read the contents of a specific file
-- Helpful for examining source code, configuration files, or log files
-- Perfect for looking at text-based file formats
+Usage:
 
-HOW TO USE:
-- Provide the path to the file you want to view
-- Optionally specify an offset to start reading from a specific line
-- Optionally specify a limit to control how many lines are read
+- The file_path parameter must be an absolute path, not a relative path
+- By default, it reads up to 2000 lines starting from the beginning of the file
+- You can optionally specify a line offset and limit (especially handy for long
+files), but it's recommended to read the whole file by not providing these parameters
+- Any lines longer than 2000 characters will be truncated
+- Results are returned using cat -n format, with line numbers starting at 1
+- This tool allows you to read images (eg PNG, JPG, etc). When reading an
+image file the contents are presented visually as Claude Code is a multimodal LLM.
+- You have the capability to call multiple tools in a single response. It is always
+better to speculatively read multiple files as a batch that are potentially useful.
+- You will regularly be asked to read screenshots. If the user provides a path to a
+screenshot ALWAYS use this tool to view the file at the path. This tool will work
+with all temporary file paths like
+/var/folders/123/abc/T/TemporaryItems/NSIRD_screencaptureui_ZfB1tD/Screenshot.png
+- If you read a file that exists but has empty contents you will receive a system
+reminder warning in place of file contents.
 
-FEATURES:
-- Displays file contents with line numbers for easy reference
-- Can read from any position in a file using the offset parameter
-- Handles large files by limiting the number of lines read
-- Automatically truncates very long lines for better display
-- Suggests similar file names when the requested file isn't found
+Parameters:
 
-LIMITATIONS:
-- Maximum file size is 250KB
-- Default reading limit is 2000 lines
-- Lines longer than 2000 characters are truncated
-- Cannot display binary files or images
-- Images can be identified but not displayed
-
-TIPS:
-- Use with Glob tool to first find files you want to view
-- For code exploration, first use Grep to find relevant files, then View to examine them
-- When viewing large files, use the offset parameter to read specific sections
+- file_path (required): The absolute path to the file to read
+- limit (optional): The number of lines to read. Only provide if the file is too
+large to read at once.
+- offset (optional): The line number to start reading from. Only provide if the file
+is too large to read at once

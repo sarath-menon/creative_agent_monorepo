@@ -26,7 +26,7 @@ export const MediaPreview = ({ attachedMedia, onRemoveItem }: MediaPreviewProps)
                         <img 
                           src={media.preview} 
                           alt={media.name}
-                          className="w-12 h-12 object-cover rounded-lg border border-stone-600"
+                          className="size-14 object-cover rounded-lg border border-stone-600"
                           onError={(e) => {
                             console.error('❌ [Media Debug] Image failed to load:', { 
                               name: media.name, 
@@ -40,12 +40,12 @@ export const MediaPreview = ({ attachedMedia, onRemoveItem }: MediaPreviewProps)
                           }}
                         />
                         <ImageIcon 
-                          className="w-12 h-12 text-stone-400 absolute top-0 left-0 rounded-lg border border-stone-600 bg-stone-700/50 p-2" 
+                          className="size-14 text-stone-400 absolute top-0 left-0 rounded-lg border border-stone-600 bg-stone-700/50 p-2" 
                           style={{ display: 'none' }}
                         />
                       </div>
                     ) : (
-                      <div className="w-12 h-12 bg-stone-700/50 border border-stone-600 rounded-lg flex items-center justify-center">
+                      <div className="size-14 bg-stone-700/50 border border-stone-600 rounded-lg flex items-center justify-center">
                         <ImageIcon className="w-6 h-6 text-stone-400" />
                       </div>
                     )}
@@ -58,9 +58,9 @@ export const MediaPreview = ({ attachedMedia, onRemoveItem }: MediaPreviewProps)
             </TooltipProvider>
             <button
               onClick={() => onRemoveItem(index)}
-              className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 hover:bg-red-600 rounded-full flex items-center justify-center transition-colors"
+              className="absolute top-1 right-1 p-[2px] bg-red-500/80 hover:bg-red-600 rounded-full flex items-center justify-center transition-colors"
             >
-              <X className="w-3 h-3 text-white" />
+              <X className="size-3 text-white" />
             </button>
           </div>
         ))}

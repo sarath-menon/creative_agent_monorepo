@@ -2,7 +2,7 @@
 
 ## Executive Summary
 
-**OpenCode** is a sophisticated AI-powered assistant for general-purpose task automation and AI assistance. It features an interactive terminal user interface (TUI) as the primary mode, with CLI-only mode for scripting and structured data queries. The system is designed as a standalone interactive tool with a clean, minimal interface that prioritizes simplicity and reliability.
+**OpenCode** is a sophisticated AI-powered assistant for general-purpose task automation and AI assistance. It provides CLI-only mode for scripting and structured data queries, along with an HTTP API for web integrations. The system is designed as a standalone tool with a clean, minimal interface that prioritizes simplicity and reliability.
 
 ## Project Overview
 
@@ -10,13 +10,12 @@
 - **Language**: Go 1.24.0
 - **Database**: SQLite with SQLC for type-safe queries
 - **CLI Framework**: Cobra for command-line interface
-- **TUI Framework**: Charm Bubbles for interactive terminal interface
 - **Configuration**: Viper for configuration management
 - **Build System**: Go modules with custom build scripts
 
 ### Architecture Philosophy
 - **Minimal Complexity**: Simple, maintainable code with clean interfaces
-- **Dual Interface Model**: Interactive TUI for users, CLI for scripting and data queries
+- **Dual Interface Model**: CLI for scripting and HTTP API for web applications
 - **Data Query System**: JSON-RPC structured data access via CLI
 - **Multi-Provider AI**: Support for multiple AI backends (Anthropic, OpenAI, etc.)
 - **Tool Extensibility**: MCP protocol for external integrations
@@ -25,45 +24,37 @@
 
 ### 1. Entry Points (`main.go`, `cmd/`)
 - Single main entry point with Cobra CLI framework
-- **Default**: Interactive TUI mode for user conversations
+- **Default**: CLI mode with explicit prompt flag required
 - CLI-only mode for scripting and automation (`-p "prompt"`)
 - **Data query mode** for structured data access (`--query <type>`)
 - Graceful shutdown and panic recovery
 
-### 2. Terminal User Interface (`internal/tui/`)
-- **Interactive chat interface** using Charm Bubbles framework
-- Real-time conversation with AI assistant
-- **Slash Commands**: Type `/` for interactive command suggestions with autocomplete
-- **Keyboard shortcuts**: Enter (send), Ctrl+L (clear), Ctrl+C/Esc (quit), Tab (accept suggestion)
-- Styled components with lipgloss for visual appeal
-- Scrollable message history with syntax highlighting
-
-### 3. Core Application (`internal/app/`)
+### 2. Core Application (`internal/app/`)
 - Central app orchestrator managing all services
 - Session management and message handling
 - CLI-only execution flow for scripting
 - Automatic permission approval for non-interactive sessions
 
-### 4. LLM Integration (`internal/llm/`)
+### 3. LLM Integration (`internal/llm/`)
 - **Agents**: Main coder agent with tool orchestration
 - **Models**: Support for multiple AI providers (OpenAI, Anthropic, Azure, Gemini, Groq, etc.)
 - **Providers**: Provider-specific implementations for each AI service
 - **Tools**: Comprehensive AI assistant tools (bash, file ops, grep, edit, etc.)
 - **Prompts**: Embedded markdown prompts with templating support
 
-### 5. Data Query Interface (`internal/api/`)
+### 4. Data Query Interface (`internal/api/`)
 - **JSON-RPC query system** for structured data access
 - **CLI interface**: `--query <type> --output-format json`
 - **Query types**: `sessions`, `tools`, `mcp`, `commands`
 - Perfect for **native app integration** (Swift, Electron, etc.)
 
-### 6. Data Layer (`internal/db/`)
+### 5. Data Layer (`internal/db/`)
 - SQLite database with proper migrations
 - Three core entities: Sessions, Messages, Files
 - SQLC for type-safe database operations
 - Automatic timestamping and relationship management
 
-### 7. Supporting Services
+### 6. Supporting Services
 - **Permissions**: Request approval system (can be bypassed with `--dangerously-skip-permissions` for trusted environments)
 - **Logging**: Structured logging throughout
 - **File Operations**: Safe file manipulation with history tracking
@@ -113,7 +104,7 @@ OpenCode also provides an HTTP JSON-RPC server for web-based integrations:
 # Start HTTP server with permissions skipped (for development/trusted environments)
 ./build/go_general_agent --http-port 8080 --dangerously-skip-permissions
 
-# Run both TUI and HTTP server simultaneously
+# Run HTTP server with debug logging
 ./build/go_general_agent --http-port 8080 --debug
 ```
 

@@ -342,28 +342,6 @@
       "description": "LLM provider configurations",
       "type": "object"
     },
-    "tui": {
-      "description": "Terminal User Interface configuration",
-      "properties": {
-        "theme": {
-          "default": "opencode",
-          "description": "TUI theme name",
-          "enum": [
-            "opencode",
-            "catppuccin",
-            "dracula",
-            "flexoki",
-            "gruvbox",
-            "monokai",
-            "onedark",
-            "tokyonight",
-            "tron"
-          ],
-          "type": "string"
-        }
-      },
-      "type": "object"
-    },
     "wd": {
       "description": "Working directory for the application",
       "type": "string"

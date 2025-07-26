@@ -5,11 +5,11 @@ This monorepo contains two main projects:
 ## Projects
 
 ### go_backend
-A Go-based general agent with CLI interface and API endpoints.
+A Go-based general agent with CLI interface and HTTP API endpoints.
 
 **Key features:**
-- Command-line interface
-- API server functionality  
+- Command-line interface for direct prompt processing
+- HTTP API server functionality  
 - Database integration with SQLite
 - Multiple LLM provider support (Anthropic, OpenAI, Azure, etc.)
 - File operations and tool integrations
@@ -18,7 +18,10 @@ A Go-based general agent with CLI interface and API endpoints.
 ```bash
 cd go_backend
 make build
-./go_general_agent
+# CLI mode
+./go_general_agent -p "Your prompt here"
+# Or HTTP server mode
+./go_general_agent --http-port 8080
 ```
 
 ### recreate_tauri_app

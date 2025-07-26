@@ -62,7 +62,7 @@ type Data struct {
 	Directory string `json:"directory,omitempty"`
 }
 
-// Removed LSP and TUI configs for embedded binary
+// Removed LSP configs for embedded binary
 
 // ShellConfig defines the configuration for the shell used by the bash tool.
 type ShellConfig struct {
@@ -607,6 +607,6 @@ func UpdateAgentModel(agentName AgentName, modelID models.ModelID) error {
 	})
 }
 
-// Removed UpdateTheme function for embedded binary (no TUI)
+// Removed UpdateTheme function for embedded binary
 
 // Removed GitHub token loading for embedded binary

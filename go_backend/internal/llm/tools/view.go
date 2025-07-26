@@ -3,6 +3,7 @@ package tools
 import (
 	"bufio"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -10,7 +11,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"go_general_agent/internal/config"
 	"go_general_agent/internal/logging"
 )
 
@@ -30,7 +30,6 @@ type ViewResponseMetadata struct {
 
 const (
 	ViewToolName     = "view"
-	MaxReadSize      = 250 * 1024
 	DefaultReadLimit = 2000
 	MaxLineLength    = 2000
 )
@@ -46,7 +45,7 @@ func (v *viewTool) Info() ToolInfo {
 		Parameters: map[string]any{
 			"file_path": map[string]any{
 				"type":        "string",
-				"description": "The path to the file to read",
+				"description": "The absolute path to the file to read",
 			},
 			"offset": map[string]any{
 				"type":        "integer",
@@ -73,10 +72,10 @@ func (v *viewTool) Run(ctx context.Context, call ToolCall) (ToolResponse, error)
 		return NewTextErrorResponse("file_path is required"), nil
 	}
 
-	// Handle relative paths
+	// Require absolute paths only
 	filePath := params.FilePath
 	if !filepath.IsAbs(filePath) {
-		filePath = filepath.Join(config.WorkingDirectory(), filePath)
+		return NewTextErrorResponse("file_path must be an absolute path, not a relative path"), nil
 	}
 
 	// Check if file exists
@@ -116,11 +115,6 @@ func (v *viewTool) Run(ctx context.Context, call ToolCall) (ToolResponse, error)
 		return NewTextErrorResponse(fmt.Sprintf("Path is a directory, not a file: %s", filePath)), nil
 	}
 
-	// Check file size
-	if fileInfo.Size() > MaxReadSize {
-		return NewTextErrorResponse(fmt.Sprintf("File is too large (%d bytes). Maximum size is %d bytes",
-			fileInfo.Size(), MaxReadSize)), nil
-	}
 
 	// Set default limit if not provided
 	if params.Limit <= 0 {
@@ -129,15 +123,46 @@ func (v *viewTool) Run(ctx context.Context, call ToolCall) (ToolResponse, error)
 
 	// Check if it's an image file
 	isImage, imageType := isImageFile(filePath)
-	// TODO: handle images
 	if isImage {
-		return NewTextErrorResponse(fmt.Sprintf("This is an image file of type: %s\nUse a different tool to process images", imageType)), nil
+		// Read image file as binary data and return as image response
+		imageData, err := os.ReadFile(filePath)
+		if err != nil {
+			return ToolResponse{}, fmt.Errorf("error reading image file: %w", err)
+		}
+		
+		// Encode as base64
+		base64Data := base64.StdEncoding.EncodeToString(imageData)
+		
+		recordFileRead(filePath)
+		return WithResponseMetadata(
+			ToolResponse{
+				Type:    ToolResponseTypeImage,
+				Content: base64Data,
+			},
+			ViewResponseMetadata{
+				FilePath: filePath,
+				Content:  fmt.Sprintf("Image file (%s): %s", imageType, filePath),
+			},
+		), nil
 	}
 
 	// Read the file content
 	content, lineCount, err := readTextFile(filePath, params.Offset, params.Limit)
 	if err != nil {
 		return ToolResponse{}, fmt.Errorf("error reading file: %w", err)
+	}
+
+	// Handle empty files
+	if content == "" && lineCount == 0 {
+		output := "<file>\n<system-reminder>\nFile exists but has empty contents.\n</system-reminder>\n</file>\n"
+		recordFileRead(filePath)
+		return WithResponseMetadata(
+			NewTextResponse(output),
+			ViewResponseMetadata{
+				FilePath: filePath,
+				Content:  "",
+			},
+		), nil
 	}
 
 	// LSP functionality removed
@@ -174,14 +199,8 @@ func addLineNumbers(content string, startLine int) string {
 		line = strings.TrimSuffix(line, "\r")
 
 		lineNum := i + startLine
-		numStr := fmt.Sprintf("%d", lineNum)
-
-		if len(numStr) >= 6 {
-			result = append(result, fmt.Sprintf("%s|%s", numStr, line))
-		} else {
-			paddedNum := fmt.Sprintf("%6s", numStr)
-			result = append(result, fmt.Sprintf("%s|%s", paddedNum, line))
-		}
+		// Use cat -n format: right-aligned line number followed by tab and content
+		result = append(result, fmt.Sprintf("%6d\t%s", lineNum, line))
 	}
 
 	return strings.Join(result, "\n")

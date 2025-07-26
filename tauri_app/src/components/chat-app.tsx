@@ -513,10 +513,7 @@ export function ChatApp() {
               <AIInputButton onClick={handleOpenFileDialog}>
                 <PlusIcon className='size-6' />
               </AIInputButton>
-              <AIInputButton>
-                <MicIcon className='size-5' />
-              </AIInputButton>
-   
+
 
             </AIInputTools>
             <AIInputSubmit 

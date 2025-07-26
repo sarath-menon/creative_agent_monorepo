@@ -20,7 +20,6 @@ import (
 	httphandlers "go_general_agent/internal/http"
 	"go_general_agent/internal/llm/agent"
 	"go_general_agent/internal/logging"
-	"go_general_agent/internal/tui"
 	"go_general_agent/internal/version"
 
 	"github.com/spf13/cobra"
@@ -28,24 +27,23 @@ import (
 
 var rootCmd = &cobra.Command{
 	Use:   "opencode",
-	Short: "AI assistant for software development with interactive TUI",
+	Short: "AI assistant for software development with CLI and HTTP API",
 	Long: `OpenCode is a powerful AI assistant that helps with software development tasks.
-By default, it runs an interactive terminal interface (TUI). It also provides an HTTP API 
+It provides both CLI-only mode for direct prompt processing and an HTTP API 
 for AI capabilities, file operations, and MCP integration to assist in video generation 
 and content creation workflows.`,
 	Example: `
-  # Default: Run interactive TUI
-  opencode
-
-  # Run with debug logging
-  opencode -d
-
-  # CLI-only mode (no TUI, direct output)
+  # CLI mode with prompt (direct output)
   opencode -p "Explain the use of context in Go"
 
   # CLI mode with JSON output format
   opencode -p "Explain the use of context in Go" -f json
 
+  # Start HTTP API server
+  opencode --http-port 8080
+
+  # Run with debug logging
+  opencode -d -p "Your prompt here"
 
   # Print version
   opencode -v
@@ -130,8 +128,9 @@ and content creation workflows.`,
 			return app.RunNonInteractive(ctx, prompt, outputFormat, quiet)
 		}
 
-		// Default: TUI mode (interactive terminal interface)
-		return tui.Run(ctx, app)
+		// Default: Show help when no mode is specified
+		cmd.Help()
+		return fmt.Errorf("no mode specified - use --prompt for CLI mode or --http-port for server mode")
 	},
 }
 
@@ -399,7 +398,7 @@ func init() {
 	rootCmd.Flags().StringP("cwd", "c", "", "Current working directory")
 
 	// CLI-only mode flags
-	rootCmd.Flags().StringP("prompt", "p", "", "Run in CLI-only mode with this prompt (no TUI)")
+	rootCmd.Flags().StringP("prompt", "p", "", "Run in CLI mode with this prompt")
 	rootCmd.Flags().StringP("output-format", "f", format.Text.String(),
 		"Output format for CLI-only mode (text, json)")
 	rootCmd.Flags().BoolP("quiet", "q", false, "Hide spinner in CLI-only mode")

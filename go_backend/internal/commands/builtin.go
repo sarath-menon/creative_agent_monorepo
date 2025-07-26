@@ -94,7 +94,7 @@ func createHelpHandler(registry *Registry) func(ctx context.Context, args string
 
 func createClearHandler() func(ctx context.Context, args string) (string, error) {
 	return func(ctx context.Context, args string) (string, error) {
-		return "CLEAR_CHAT", nil // Special message to trigger clear in TUI
+		return "Chat history cleared. Note: This command is only functional in interactive modes.", nil
 	}
 }
 
@@ -103,17 +103,17 @@ func createSessionHandler() func(ctx context.Context, args string) (string, erro
 		args = strings.TrimSpace(args)
 		if args == "" {
 			// Show current session info
-			return "SESSION_INFO:", nil
+			return "Current session information is available via the HTTP API or database queries.", nil
 		} else {
 			// Switch to specific session
-			return "SESSION_SWITCH:" + args, nil
+			return fmt.Sprintf("Session switching to '%s' is available via the HTTP API.", args), nil
 		}
 	}
 }
 
 func createSessionsHandler() func(ctx context.Context, args string) (string, error) {
 	return func(ctx context.Context, args string) (string, error) {
-		return "SESSION_LIST", nil
+		return "Session listing is available via the HTTP API or database queries. Use '--query sessions' for programmatic access.", nil
 	}
 }
 
