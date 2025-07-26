@@ -3,7 +3,6 @@ package tools
 import (
 	"bufio"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -124,24 +123,22 @@ func (v *viewTool) Run(ctx context.Context, call ToolCall) (ToolResponse, error)
 	// Check if it's an image file
 	isImage, imageType := isImageFile(filePath)
 	if isImage {
-		// Read image file as binary data and return as image response
-		imageData, err := os.ReadFile(filePath)
+		// Get image file info
+		fileInfo, err := os.Stat(filePath)
 		if err != nil {
-			return ToolResponse{}, fmt.Errorf("error reading image file: %w", err)
+			return ToolResponse{}, fmt.Errorf("error getting image file info: %w", err)
 		}
 		
-		// Encode as base64
-		base64Data := base64.StdEncoding.EncodeToString(imageData)
+		// Return text description instead of base64 data to avoid context overflow
+		imageDescription := fmt.Sprintf("Image file (%s) at %s\nFile size: %d bytes\nTo analyze this image, you would need to process it with an image analysis tool.", 
+			imageType, filePath, fileInfo.Size())
 		
 		recordFileRead(filePath)
 		return WithResponseMetadata(
-			ToolResponse{
-				Type:    ToolResponseTypeImage,
-				Content: base64Data,
-			},
+			NewTextResponse(imageDescription),
 			ViewResponseMetadata{
 				FilePath: filePath,
-				Content:  fmt.Sprintf("Image file (%s): %s", imageType, filePath),
+				Content:  imageDescription,
 			},
 		), nil
 	}

@@ -163,15 +163,29 @@ func Load(workingDir string, debug bool, skipPermissions bool) (*Config, error) 
 		if err != nil {
 			return cfg, fmt.Errorf("failed to open log file: %w", err)
 		}
-		// Configure logger
+		// Configure logger without timestamps
 		logger := slog.New(slog.NewTextHandler(sloggingFileWriter, &slog.HandlerOptions{
 			Level: defaultLevel,
+			ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
+				// Remove the time attribute
+				if a.Key == slog.TimeKey {
+					return slog.Attr{}
+				}
+				return a
+			},
 		}))
 		slog.SetDefault(logger)
 	} else {
-		// Configure logger
+		// Configure logger without timestamps
 		logger := slog.New(slog.NewTextHandler(logging.NewWriter(), &slog.HandlerOptions{
 			Level: defaultLevel,
+			ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
+				// Remove the time attribute
+				if a.Key == slog.TimeKey {
+					return slog.Attr{}
+				}
+				return a
+			},
 		}))
 		slog.SetDefault(logger)
 	}

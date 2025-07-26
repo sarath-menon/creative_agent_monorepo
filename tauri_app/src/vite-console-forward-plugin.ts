@@ -244,7 +244,7 @@ export default { flushLogs };
               }
 
               // Use Vite's logger for consistent formatting
-              const logOptions = { timestamp: true };
+              const logOptions = { timestamp: false };
               switch (log.level) {
                 case "error":
                   const error =

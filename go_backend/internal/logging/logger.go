@@ -10,6 +10,21 @@ import (
 	"time"
 )
 
+func init() {
+	// Create a custom handler that removes timestamps
+	opts := &slog.HandlerOptions{
+		ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
+			// Remove the time attribute
+			if a.Key == slog.TimeKey {
+				return slog.Attr{}
+			}
+			return a
+		},
+	}
+	handler := slog.NewTextHandler(os.Stdout, opts)
+	slog.SetDefault(slog.New(handler))
+}
+
 func getCaller() string {
 	var caller string
 	if _, file, line, ok := runtime.Caller(2); ok {
