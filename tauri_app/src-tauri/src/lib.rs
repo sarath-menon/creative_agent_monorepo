@@ -1,19 +1,16 @@
 // mod sidecar;
 // use sidecar::SidecarManager;
 
-use objc2::runtime::Object;
 use objc2_app_kit::{NSColor, NSWindow};
+use objc2::ffi::nil;
+use objc2::ffi::id;
 
 #[cfg(target_os = "macos")]
-use objc2_app_kit::NSWorkspace;
+use objc2_app_kit::{NSWorkspace, NSRunningApplication, NSBitmapImageRep};
 #[cfg(target_os = "macos")]
-use cocoa::base::{id, nil};
+use objc2_foundation::{NSArray, NSString};
 #[cfg(target_os = "macos")]
-use cocoa::foundation::{NSArray, NSData};
-#[cfg(target_os = "macos")]
-use objc::runtime::{YES, NO};
-#[cfg(target_os = "macos")]
-use objc::{msg_send, sel, sel_impl};
+use objc2::{msg_send, ClassType};
 #[cfg(target_os = "macos")]
 use std::ffi::CStr;
 #[cfg(target_os = "macos")]
@@ -21,19 +18,14 @@ use base64::engine::general_purpose;
 #[cfg(target_os = "macos")]
 use base64::Engine;
 
-use std::sync::Arc;
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
-use tauri::{AppHandle, Listener, Manager, State, TitleBarStyle, WebviewUrl, WebviewWindowBuilder};
+use tauri::{Manager, TitleBarStyle, WebviewUrl, WebviewWindowBuilder};
 
 #[cfg(desktop)]
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-#[tauri::command]
-fn greet(name: &str) -> String {
-    format!("Hello, {}! You've been greeted from Rust!", name)
-}
 
 #[cfg(target_os = "macos")]
 #[derive(serde::Serialize)]
@@ -47,17 +39,14 @@ struct AppInfo {
 async fn list_apps_with_icons() -> Result<Vec<AppInfo>, String> {
     unsafe {
         let workspace = NSWorkspace::sharedWorkspace();
-        let workspace_ptr = std::ptr::addr_of!(*workspace) as id;
-        let apps: id = msg_send![workspace_ptr, runningApplications];
-        let count = NSArray::count(apps) as isize;
-        let mut result = Vec::with_capacity(count as usize);
+        let apps = workspace.runningApplications();
+        let mut result = Vec::with_capacity(apps.len());
 
-        for i in 0..count {
-            let app: id = NSArray::objectAtIndex(apps, i.try_into().unwrap());
+        for app in apps.iter() {
             
             // Check if app is visible (not background-only)
-            let is_hidden: bool = msg_send![app, isHidden];
-            let activation_policy: i64 = msg_send![app, activationPolicy];
+            let is_hidden: bool = msg_send![&*app, isHidden];
+            let activation_policy: i64 = msg_send![&*app, activationPolicy];
             
             // Only include regular GUI apps (activation policy 0 = NSApplicationActivationPolicyRegular)
             // Skip accessory apps (1) like browser plugins and prohibited apps (2) like background processes
@@ -66,7 +55,7 @@ async fn list_apps_with_icons() -> Result<Vec<AppInfo>, String> {
             }
 
             // Get app name
-            let name_ns: id = msg_send![app, localizedName];
+            let name_ns: id = msg_send![&*app, localizedName];
             if name_ns == nil {
                 continue;
             }
@@ -81,7 +70,7 @@ async fn list_apps_with_icons() -> Result<Vec<AppInfo>, String> {
             }
 
             // Get app icon
-            let icon: id = msg_send![app, icon];
+            let icon: id = msg_send![&*app, icon];
             if icon == nil {
                 // Skip apps without icons
                 continue;
@@ -94,14 +83,14 @@ async fn list_apps_with_icons() -> Result<Vec<AppInfo>, String> {
             }
 
             // Create bitmap representation from TIFF data
-            let bitmap_rep: id = msg_send![objc::class!(NSBitmapImageRep), alloc];
+            let bitmap_rep: id = msg_send![NSBitmapImageRep::class(), alloc];
             let bitmap_rep: id = msg_send![bitmap_rep, initWithData: tiff_data];
             if bitmap_rep == nil {
                 continue;
             }
 
             // Convert to PNG data (NSBitmapImageFileTypePNG = 4)
-            let png_data: id = msg_send![bitmap_rep, representationUsingType: 4u64 properties: nil];
+            let png_data: id = msg_send![bitmap_rep, representationUsingType: 4u64, properties: nil];
             if png_data == nil {
                 continue;
             }
@@ -218,12 +207,11 @@ pub fn run() {
                 }
             }
 
-            let app_handle = app.handle().clone();
+            let _app_handle = app.handle().clone();
             // let manager = sidecar_manager.clone();
 
             // Clone for auto-start
             // let startup_manager = manager.clone();
-            let startup_handle = app_handle.clone();
 
             // Auto-start sidecar on app launch
             // tauri::async_runtime::spawn(async move {

@@ -5,13 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
 
 	"go_general_agent/internal/config"
 	"go_general_agent/internal/permission"
+	"go_general_agent/internal/utils"
 )
 
 type PixelmatorParams struct {
@@ -188,14 +188,6 @@ func (p *pixelmatorTool) Run(ctx context.Context, call ToolCall) (ToolResponse, 
 	return NewTextResponse(string(resultJSON)), nil
 }
 
-func (p *pixelmatorTool) executeAppleScript(ctx context.Context, script string) (string, error) {
-	cmd := exec.CommandContext(ctx, "osascript", "-e", script)
-	output, err := cmd.Output()
-	if err != nil {
-		return "", fmt.Errorf("applescript execution failed: %w", err)
-	}
-	return strings.TrimSpace(string(output)), nil
-}
 
 func (p *pixelmatorTool) openDocument(ctx context.Context, args interface{}) (*DocumentInfo, error) {
 	var params OpenParams
@@ -208,7 +200,7 @@ func (p *pixelmatorTool) openDocument(ctx context.Context, args interface{}) (*D
 	}
 
 	script := fmt.Sprintf(`tell application "Pixelmator Pro" to open POSIX file "%s"`, params.Filepath)
-	_, err := p.executeAppleScript(ctx, script)
+	_, err := utils.ExecuteAppleScript(ctx, script)
 	if err != nil {
 		return nil, err
 	}
@@ -218,7 +210,7 @@ func (p *pixelmatorTool) openDocument(ctx context.Context, args interface{}) (*D
 
 func (p *pixelmatorTool) getDocumentInfo(ctx context.Context) (*DocumentInfo, error) {
 	script := `tell application "Pixelmator Pro" to tell front document to return (width as string) & "|" & (height as string) & "|" & name & "|" & id`
-	result, err := p.executeAppleScript(ctx, script)
+	result, err := utils.ExecuteAppleScript(ctx, script)
 	if err != nil {
 		if strings.Contains(err.Error(), "front document") {
 			return nil, fmt.Errorf("no document is currently open")
@@ -256,7 +248,7 @@ func (p *pixelmatorTool) cropDocument(ctx context.Context, args interface{}) (*D
 	}
 
 	script := fmt.Sprintf(`tell application "Pixelmator Pro" to tell front document to crop bounds {%d, %d, %d, %d}`, x, y, x+width, y+height)
-	_, err := p.executeAppleScript(ctx, script)
+	_, err := utils.ExecuteAppleScript(ctx, script)
 	if err != nil {
 		return nil, err
 	}
@@ -287,7 +279,7 @@ func (p *pixelmatorTool) resizeDocument(ctx context.Context, args interface{}) (
 	}
 
 	script := fmt.Sprintf(`tell application "Pixelmator Pro" to tell front document to resize to dimensions {%d, %d} algorithm "%s"`, params.Width, params.Height, algorithm)
-	_, err := p.executeAppleScript(ctx, script)
+	_, err := utils.ExecuteAppleScript(ctx, script)
 	if err != nil {
 		return nil, err
 	}
@@ -324,7 +316,7 @@ func (p *pixelmatorTool) exportDocument(ctx context.Context, args interface{}) (
 		script = fmt.Sprintf(`tell application "Pixelmator Pro" to export front document to POSIX file "%s" as %s`, params.OutputPath, format)
 	}
 
-	_, err := p.executeAppleScript(ctx, script)
+	_, err := utils.ExecuteAppleScript(ctx, script)
 	if err != nil {
 		return nil, err
 	}
@@ -349,11 +341,11 @@ func (p *pixelmatorTool) closeDocument(ctx context.Context, args interface{}) (b
 
 	if params.Save {
 		script := `tell application "Pixelmator Pro" to save front document`
-		p.executeAppleScript(ctx, script) // Ignore save errors
+		utils.ExecuteAppleScript(ctx, script) // Ignore save errors
 	}
 
 	script := `tell application "Pixelmator Pro" to close front document`
-	_, err := p.executeAppleScript(ctx, script)
+	_, err := utils.ExecuteAppleScript(ctx, script)
 	if err != nil {
 		return false, fmt.Errorf("failed to close document")
 	}
@@ -363,7 +355,7 @@ func (p *pixelmatorTool) closeDocument(ctx context.Context, args interface{}) (b
 
 func (p *pixelmatorTool) getLayers(ctx context.Context) ([]LayerInfo, error) {
 	script := `tell application "Pixelmator Pro" to get name of every layer of front document`
-	result, err := p.executeAppleScript(ctx, script)
+	result, err := utils.ExecuteAppleScript(ctx, script)
 	if err != nil {
 		return nil, fmt.Errorf("no document is currently open")
 	}
@@ -431,7 +423,7 @@ func (p *pixelmatorTool) createLayer(ctx context.Context, args interface{}) (*La
 		return nil, fmt.Errorf("invalid layer_type: %s", params.LayerType)
 	}
 
-	_, err := p.executeAppleScript(ctx, script)
+	_, err := utils.ExecuteAppleScript(ctx, script)
 	if err != nil {
 		return nil, err
 	}
@@ -452,7 +444,7 @@ func (p *pixelmatorTool) duplicateLayer(ctx context.Context, args interface{}) (
 	}
 
 	script := fmt.Sprintf(`tell application "Pixelmator Pro" to duplicate layer "%s" of front document`, params.LayerName)
-	_, err := p.executeAppleScript(ctx, script)
+	_, err := utils.ExecuteAppleScript(ctx, script)
 	if err != nil {
 		return nil, err
 	}
@@ -473,7 +465,7 @@ func (p *pixelmatorTool) deleteLayer(ctx context.Context, args interface{}) (boo
 	}
 
 	script := fmt.Sprintf(`tell application "Pixelmator Pro" to delete layer "%s" of front document`, params.LayerName)
-	_, err := p.executeAppleScript(ctx, script)
+	_, err := utils.ExecuteAppleScript(ctx, script)
 	if err != nil {
 		return false, err
 	}
@@ -498,7 +490,7 @@ func (p *pixelmatorTool) exportCurrentView(ctx context.Context, args interface{}
 	}
 
 	script := fmt.Sprintf(`tell application "Pixelmator Pro" to export current view to POSIX file "%s" as %s`, params.OutputPath, format)
-	_, err := p.executeAppleScript(ctx, script)
+	_, err := utils.ExecuteAppleScript(ctx, script)
 	if err != nil {
 		return nil, err
 	}

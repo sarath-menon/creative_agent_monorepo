@@ -36,6 +36,7 @@ func CoderAgentTools(
 			tools.NewWriteTool(permissions, history),
 			tools.NewBlenderTool(permissions, blenderExecutor),
 			tools.NewPixelmatorTool(permissions, bashTool),
+			tools.NewNotesTool(permissions, bashTool),
 			NewAgentTool(sessions, messages),
 		}, otherTools...,
 	)
