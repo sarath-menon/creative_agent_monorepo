@@ -3,12 +3,11 @@
 
 use objc2_app_kit::{NSColor, NSWindow};
 use objc2::ffi::nil;
-use objc2::ffi::id;
+use objc2::runtime::AnyObject;
 
 #[cfg(target_os = "macos")]
-use objc2_app_kit::{NSWorkspace, NSRunningApplication, NSBitmapImageRep};
+use objc2_app_kit::{NSWorkspace, NSBitmapImageRep};
 #[cfg(target_os = "macos")]
-use objc2_foundation::{NSArray, NSString};
 #[cfg(target_os = "macos")]
 use objc2::{msg_send, ClassType};
 #[cfg(target_os = "macos")]
@@ -55,7 +54,7 @@ async fn list_apps_with_icons() -> Result<Vec<AppInfo>, String> {
             }
 
             // Get app name
-            let name_ns: id = msg_send![&*app, localizedName];
+            let name_ns: *mut AnyObject = msg_send![&*app, localizedName];
             if name_ns == nil {
                 continue;
             }
@@ -70,27 +69,27 @@ async fn list_apps_with_icons() -> Result<Vec<AppInfo>, String> {
             }
 
             // Get app icon
-            let icon: id = msg_send![&*app, icon];
+            let icon: *mut AnyObject = msg_send![&*app, icon];
             if icon == nil {
                 // Skip apps without icons
                 continue;
             }
 
             // Convert icon to PNG data
-            let tiff_data: id = msg_send![icon, TIFFRepresentation];
+            let tiff_data: *mut AnyObject = msg_send![icon, TIFFRepresentation];
             if tiff_data == nil {
                 continue;
             }
 
             // Create bitmap representation from TIFF data
-            let bitmap_rep: id = msg_send![NSBitmapImageRep::class(), alloc];
-            let bitmap_rep: id = msg_send![bitmap_rep, initWithData: tiff_data];
+            let bitmap_rep: *mut AnyObject = msg_send![NSBitmapImageRep::class(), alloc];
+            let bitmap_rep: *mut AnyObject = msg_send![bitmap_rep, initWithData: tiff_data];
             if bitmap_rep == nil {
                 continue;
             }
 
             // Convert to PNG data (NSBitmapImageFileTypePNG = 4)
-            let png_data: id = msg_send![bitmap_rep, representationUsingType: 4u64, properties: nil];
+            let png_data: *mut AnyObject = msg_send![bitmap_rep, representationUsingType: 4u64, properties: nil];
             if png_data == nil {
                 continue;
             }
