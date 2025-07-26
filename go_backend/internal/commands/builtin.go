@@ -53,11 +53,6 @@ func GetBuiltinCommands(registry *Registry) map[string]Command {
 			description: "List all available sessions",
 			handler:     createSessionsHandler(),
 		},
-		"tools": &BuiltinCommand{
-			name:        "tools",
-			description: "List available tools",
-			handler:     createToolsHandler(),
-		},
 		"mcp": &BuiltinCommand{
 			name:        "mcp",
 			description: "List configured MCP servers",
@@ -114,29 +109,6 @@ func createSessionHandler() func(ctx context.Context, args string) (string, erro
 func createSessionsHandler() func(ctx context.Context, args string) (string, error) {
 	return func(ctx context.Context, args string) (string, error) {
 		return "Session listing is available via the HTTP API or database queries. Use '--query sessions' for programmatic access.", nil
-	}
-}
-
-func createToolsHandler() func(ctx context.Context, args string) (string, error) {
-	return func(ctx context.Context, args string) (string, error) {
-		tools := []string{
-			"bash - Execute shell commands",
-			"edit - Edit files",
-			"glob - File pattern matching",
-			"grep - Search file contents",
-			"ls - List directory contents",
-			"read - Read file contents",
-			"write - Write files",
-			"webfetch - Fetch web content",
-			"websearch - Search the web",
-		}
-
-		result := "Available tools:\n\n"
-		for _, tool := range tools {
-			result += fmt.Sprintf("• %s\n", tool)
-		}
-
-		return result, nil
 	}
 }
 

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os/exec"
 	"strings"
 	"sync"
 	"time"
@@ -301,19 +302,52 @@ func HandleSSEStream(ctx context.Context, handler *api.QueryHandler, w http.Resp
 	}
 }
 
-// processMessage processes a single message and streams the response
-func processMessage(ctx context.Context, handler *api.QueryHandler, w http.ResponseWriter, flusher http.Flusher, sessionID, content string) error {
-	// Create a cancellable context for this message
-	msgCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
+// extractText parses JSON content to extract the actual text value
+func extractText(content string) string {
+	var textContent struct {
+		Text string `json:"text"`
+	}
+	if err := json.Unmarshal([]byte(content), &textContent); err == nil && textContent.Text != "" {
+		return textContent.Text
+	}
+	return content // fallback for raw text
+}
 
-	// Check if this is a slash command
-	if commands.IsSlashCommand(content) {
-		return handleSlashCommandStreaming(msgCtx, handler, w, flusher, sessionID, content)
+// handleShellCommand executes shell commands for ! prefixed messages
+func handleShellCommand(ctx context.Context, w http.ResponseWriter, flusher http.Flusher, text string) error {
+	// Strip ! prefix and trim whitespace
+	command := strings.TrimSpace(strings.TrimPrefix(text, "!"))
+	if command == "" {
+		command = "echo 'No command specified'"
 	}
 
+	// Execute the command
+	cmd := exec.CommandContext(ctx, "sh", "-c", command)
+	output, err := cmd.CombinedOutput()
+
+	// Prepare result
+	result := string(output)
+	if err != nil {
+		result = fmt.Sprintf("Error: %v\n%s", err, result)
+	}
+
+	// Send completion event
+	eventData := map[string]interface{}{
+		"type":    "complete",
+		"content": result,
+		"done":    true,
+	}
+	jsonData, _ := json.Marshal(eventData)
+	fmt.Fprintf(w, "event: complete\ndata: %s\n\n", string(jsonData))
+	flusher.Flush()
+
+	return nil
+}
+
+// handleRegularMessage processes regular messages through the agent
+func handleRegularMessage(ctx context.Context, handler *api.QueryHandler, w http.ResponseWriter, flusher http.Flusher, sessionID, content string) error {
 	// Start agent processing for regular content
-	events, err := handler.GetApp().CoderAgent.Run(msgCtx, sessionID, content)
+	events, err := handler.GetApp().CoderAgent.Run(ctx, sessionID, content)
 	if err != nil {
 		eventData := map[string]interface{}{
 			"type":  "error",
@@ -369,6 +403,26 @@ func processMessage(ctx context.Context, handler *api.QueryHandler, w http.Respo
 				return nil // Message complete, but keep connection open
 			}
 		}
+	}
+}
+
+// processMessage processes a single message and streams the response
+func processMessage(ctx context.Context, handler *api.QueryHandler, w http.ResponseWriter, flusher http.Flusher, sessionID, content string) error {
+	// Create a cancellable context for this message
+	msgCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	// Extract actual text from JSON content
+	text := extractText(content)
+
+	// Route based on command prefix
+	switch {
+	case strings.HasPrefix(text, "/"):
+		return handleSlashCommandStreaming(msgCtx, handler, w, flusher, sessionID, text)
+	case strings.HasPrefix(text, "!"):
+		return handleShellCommand(msgCtx, w, flusher, text)
+	default:
+		return handleRegularMessage(msgCtx, handler, w, flusher, sessionID, content)
 	}
 }
 
