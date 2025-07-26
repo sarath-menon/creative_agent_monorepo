@@ -27,6 +27,8 @@ type Service interface {
 	List(ctx context.Context, sessionID string) ([]Message, error)
 	Delete(ctx context.Context, id string) error
 	DeleteSessionMessages(ctx context.Context, sessionID string) error
+	ListUserMessageHistory(ctx context.Context, sessionID string, limit, offset int64) ([]Message, error)
+	ListPreviousSessionsUserMessages(ctx context.Context, excludeSessionID string, limit, offset int64) ([]Message, error)
 }
 
 type service struct {
@@ -131,6 +133,44 @@ func (s *service) Get(ctx context.Context, id string) (Message, error) {
 
 func (s *service) List(ctx context.Context, sessionID string) ([]Message, error) {
 	dbMessages, err := s.q.ListMessagesBySession(ctx, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	messages := make([]Message, len(dbMessages))
+	for i, dbMessage := range dbMessages {
+		messages[i], err = s.fromDBItem(dbMessage)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return messages, nil
+}
+
+func (s *service) ListUserMessageHistory(ctx context.Context, sessionID string, limit, offset int64) ([]Message, error) {
+	dbMessages, err := s.q.ListUserMessageHistory(ctx, db.ListUserMessageHistoryParams{
+		SessionID: sessionID,
+		Limit:     limit,
+		Offset:    offset,
+	})
+	if err != nil {
+		return nil, err
+	}
+	messages := make([]Message, len(dbMessages))
+	for i, dbMessage := range dbMessages {
+		messages[i], err = s.fromDBItem(dbMessage)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return messages, nil
+}
+
+func (s *service) ListPreviousSessionsUserMessages(ctx context.Context, excludeSessionID string, limit, offset int64) ([]Message, error) {
+	dbMessages, err := s.q.ListPreviousSessionsUserHistory(ctx, db.ListPreviousSessionsUserHistoryParams{
+		SessionID: excludeSessionID,
+		Limit:     limit,
+		Offset:    offset,
+	})
 	if err != nil {
 		return nil, err
 	}

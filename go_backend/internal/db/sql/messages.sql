@@ -39,3 +39,17 @@ WHERE id = ?;
 -- name: DeleteSessionMessages :exec
 DELETE FROM messages
 WHERE session_id = ?;
+
+-- name: ListUserMessageHistory :many
+SELECT *
+FROM messages
+WHERE session_id = ? AND role = 'user'
+ORDER BY created_at DESC
+LIMIT ? OFFSET ?;
+
+-- name: ListPreviousSessionsUserHistory :many
+SELECT *
+FROM messages
+WHERE session_id != ? AND role = 'user'
+ORDER BY created_at DESC
+LIMIT ? OFFSET ?;

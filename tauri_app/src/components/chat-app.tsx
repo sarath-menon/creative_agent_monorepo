@@ -39,6 +39,7 @@ import { usePersistentSSE } from '@/hooks/usePersistentSSE';
 import { useFileSystem, type FileEntry } from '@/hooks/useFileSystem';
 import { useOpenApps } from '@/hooks/useOpenApps';
 import { useMediaHandler, type MediaItem } from '@/hooks/useMediaHandler';
+import { useMessageHistory } from '@/hooks/useMessageHistory';
 import { LoadingDots } from './loading-dots';
 import { MediaPreview } from './media-preview';
 import { Badge } from '@/components/ui/badge';
@@ -82,6 +83,11 @@ export function ChatApp() {
   const [inputElement, setInputElement] = useState<HTMLTextAreaElement | null>(null);
   const interruptedMessageAddedRef = useRef(false);
 
+  // History navigation state
+  const [historyIndex, setHistoryIndex] = useState(-1);
+  const [originalText, setOriginalText] = useState('');
+  const [isInHistoryMode, setIsInHistoryMode] = useState(false);
+
   const { data: session, isLoading: sessionLoading, error: sessionError } = useSession();
   const createSession = useCreateSession();
   const sendMessage = useSendMessage();
@@ -98,6 +104,12 @@ export function ChatApp() {
     removeMediaItem, 
     clearMedia 
   } = useMediaHandler();
+
+  // Initialize message history hook
+  const messageHistory = useMessageHistory({
+    sessionId: session?.id || '',
+    batchSize: 50,
+  });
   
   // Filter apps to only show specified ones
   const allowedApps = ['Notes', 'Obsidian', 'Blender', 'Pixelmator Pro'];
@@ -159,6 +171,58 @@ export function ChatApp() {
     inputElement?.focus();
   };
 
+  // History navigation helper functions
+  const enterHistoryMode = () => {
+    if (!isInHistoryMode) {
+      setOriginalText(text);
+      setIsInHistoryMode(true);
+      setHistoryIndex(-1);
+      
+      // Load initial history (both current and cross-session) if not already loaded
+      if (messageHistory.allHistory.length === 0) {
+        messageHistory.loadInitialHistory(); // Fire and forget - don't await
+      }
+    }
+  };
+
+  const exitHistoryMode = () => {
+    setIsInHistoryMode(false);
+    setHistoryIndex(-1);
+    setText(originalText);
+    setOriginalText('');
+  };
+
+  const navigateHistory = async (direction: 'up' | 'down') => {
+    const allHistoryTexts = messageHistory.getAllHistoryTexts();
+    
+    if (direction === 'up') {
+      // Go to previous (older) message
+      const newIndex = historyIndex + 1;
+      
+      if (newIndex < allHistoryTexts.length) {
+        setHistoryIndex(newIndex);
+        setText(allHistoryTexts[newIndex]);
+        
+        // Prefetch more history when getting close to the end
+        if (newIndex > allHistoryTexts.length - 10 && messageHistory.hasMoreHistory) {
+          messageHistory.loadMoreHistory();
+        }
+      }
+    } else {
+      // Go to next (newer) message
+      const newIndex = historyIndex - 1;
+      
+      if (newIndex >= 0) {
+        setHistoryIndex(newIndex);
+        setText(allHistoryTexts[newIndex]);
+      } else if (newIndex === -1) {
+        // Return to original text
+        setHistoryIndex(-1);
+        setText(originalText);
+      }
+    }
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     // Handle Cmd+Enter for form submission (fallback)
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
@@ -167,6 +231,13 @@ export function ChatApp() {
       if (form) {
         form.requestSubmit();
       }
+      return;
+    }
+
+    // Handle Escape key - exit history mode if active
+    if (e.key === 'Escape' && isInHistoryMode) {
+      e.preventDefault();
+      exitHistoryMode();
       return;
     }
 
@@ -220,6 +291,27 @@ export function ChatApp() {
           setShowFileReferences(false);
           break;
       }
+      return; // Important: return here to prevent history navigation
+    }
+
+    // Handle history navigation when not in other modes
+    if (!showSlashCommands && !showFileReferences) {
+      switch (e.key) {
+        case 'ArrowUp':
+          e.preventDefault();
+          if (!isInHistoryMode) {
+            enterHistoryMode();
+          }
+          navigateHistory('up');
+          break;
+        case 'ArrowDown':
+          if (isInHistoryMode) {
+            e.preventDefault();
+            navigateHistory('down');
+          }
+          // Don't prevent default if not in history mode to allow normal cursor movement
+          break;
+      }
     }
   };
 
@@ -270,6 +362,13 @@ export function ChatApp() {
     }
     
     const messageText = text;
+    
+    // Exit history mode if active
+    if (isInHistoryMode) {
+      setIsInHistoryMode(false);
+      setHistoryIndex(-1);
+      setOriginalText('');
+    }
     
     // Add user message to conversation and clear input immediately
     setMessages(prev => [...prev, { 
