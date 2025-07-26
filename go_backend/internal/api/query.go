@@ -81,7 +81,7 @@ type QueryHandler struct {
 func NewQueryHandler(app *app.App) *QueryHandler {
 	// Create command registry
 	registry := commands.NewRegistry()
-	if err := registry.LoadCommands(); err != nil {
+	if err := registry.LoadCommands(app); err != nil {
 		log.Printf("ERROR: Failed to load commands: %v", err)
 		// Continue with empty registry - API will return proper errors
 	} else {

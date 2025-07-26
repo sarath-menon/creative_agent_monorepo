@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"go_general_agent/internal/app"
 )
 
 // Registry manages all available commands
@@ -20,9 +22,9 @@ func NewRegistry() *Registry {
 }
 
 // LoadCommands loads all commands (builtin and file-based)
-func (r *Registry) LoadCommands() error {
+func (r *Registry) LoadCommands(app *app.App) error {
 	// Load builtin commands
-	builtins := GetBuiltinCommands(r)
+	builtins := GetBuiltinCommands(r, app)
 	for name, cmd := range builtins {
 		r.commands[name] = cmd
 	}

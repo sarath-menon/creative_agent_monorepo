@@ -443,7 +443,7 @@ func handleSlashCommandStreaming(ctx context.Context, handler *api.QueryHandler,
 
 	// Create a command registry and load built-in commands
 	registry := commands.NewRegistry()
-	if err := registry.LoadCommands(); err != nil {
+	if err := registry.LoadCommands(handler.GetApp()); err != nil {
 		eventData := map[string]interface{}{
 			"type":  "error",
 			"error": fmt.Sprintf("Failed to load commands: %s", err.Error()),

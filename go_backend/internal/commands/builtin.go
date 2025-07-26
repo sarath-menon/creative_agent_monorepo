@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
+	"go_general_agent/internal/app"
 	"go_general_agent/internal/config"
 	"go_general_agent/internal/llm/agent"
 	"go_general_agent/internal/llm/tools"
@@ -31,7 +33,7 @@ func (c *BuiltinCommand) Execute(ctx context.Context, args string) (string, erro
 }
 
 // GetBuiltinCommands returns all built-in commands
-func GetBuiltinCommands(registry *Registry) map[string]Command {
+func GetBuiltinCommands(registry *Registry, app *app.App) map[string]Command {
 	return map[string]Command{
 		"help": &BuiltinCommand{
 			name:        "help",
@@ -46,7 +48,7 @@ func GetBuiltinCommands(registry *Registry) map[string]Command {
 		"session": &BuiltinCommand{
 			name:        "session",
 			description: "Show session information or switch sessions",
-			handler:     createSessionHandler(),
+			handler:     createSessionHandler(app),
 		},
 		"sessions": &BuiltinCommand{
 			name:        "sessions",
@@ -93,12 +95,54 @@ func createClearHandler() func(ctx context.Context, args string) (string, error)
 	}
 }
 
-func createSessionHandler() func(ctx context.Context, args string) (string, error) {
+func createSessionHandler(app *app.App) func(ctx context.Context, args string) (string, error) {
 	return func(ctx context.Context, args string) (string, error) {
 		args = strings.TrimSpace(args)
 		if args == "" {
 			// Show current session info
-			return "Current session information is available via the HTTP API or database queries.", nil
+			currentSession, err := app.GetCurrentSession(ctx)
+			if err != nil {
+				return fmt.Sprintf("Error retrieving current session: %v", err), nil
+			}
+			
+			if currentSession == nil {
+				return "No active session. Use /sessions to list available sessions.", nil
+			}
+			
+			var result strings.Builder
+			result.WriteString("## Current Session Information\n\n")
+			result.WriteString(fmt.Sprintf("- **ID:** %s\n", currentSession.ID))
+			result.WriteString(fmt.Sprintf("- **Title:** %s\n", currentSession.Title))
+			result.WriteString(fmt.Sprintf("- **Messages:** %d\n", currentSession.MessageCount))
+			
+			// Format tokens in K with input/output split
+			totalTokens := currentSession.PromptTokens + currentSession.CompletionTokens
+			totalK := float64(totalTokens) / 1000.0
+			inputK := float64(currentSession.PromptTokens) / 1000.0
+			outputK := float64(currentSession.CompletionTokens) / 1000.0
+			
+			if totalTokens > 0 {
+				result.WriteString(fmt.Sprintf("- **Tokens:** %.1fK (%.1fK in / %.1fK out)\n", totalK, inputK, outputK))
+			} else {
+				result.WriteString("- **Tokens:** 0\n")
+			}
+			result.WriteString(fmt.Sprintf("- **Cost:** $%.4f\n", currentSession.Cost))
+			
+			if currentSession.CreatedAt > 0 {
+				createdTime := time.Unix(currentSession.CreatedAt, 0)
+				result.WriteString(fmt.Sprintf("- **Created:** %s\n", createdTime.Format("2006-01-02 15:04:05")))
+			}
+			
+			if currentSession.UpdatedAt > 0 {
+				updatedTime := time.Unix(currentSession.UpdatedAt, 0)
+				result.WriteString(fmt.Sprintf("- **Last Updated:** %s\n", updatedTime.Format("2006-01-02 15:04:05")))
+			}
+			
+			if currentSession.ParentSessionID != "" {
+				result.WriteString(fmt.Sprintf("- **Parent Session:** %s\n", currentSession.ParentSessionID))
+			}
+			
+			return result.String(), nil
 		} else {
 			// Switch to specific session
 			return fmt.Sprintf("Session switching to '%s' is available via the HTTP API.", args), nil
