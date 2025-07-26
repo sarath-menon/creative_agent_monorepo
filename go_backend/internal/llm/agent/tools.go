@@ -19,10 +19,11 @@ func CoderAgentTools(
 	sessions session.Service,
 	messages message.Service,
 	history history.Service,
+	manager *MCPClientManager,
 ) []tools.BaseTool {
 	ctx := context.Background()
-	otherTools := GetMcpTools(ctx, permissions)
-	blenderExecutor := createBlenderExecutor()
+	otherTools := GetMcpTools(ctx, permissions, manager)
+	blenderExecutor := createBlenderExecutor(manager)
 	bashTool := tools.NewBashTool(permissions)
 	return append(
 		[]tools.BaseTool{
@@ -52,16 +53,10 @@ func TaskAgentTools() []tools.BaseTool {
 }
 
 // createBlenderExecutor creates a function that can execute Python code in Blender via MCP
-func createBlenderExecutor() tools.BlenderCodeExecutor {
+func createBlenderExecutor(manager *MCPClientManager) tools.BlenderCodeExecutor {
 	return func(ctx context.Context, code string) (tools.ToolResponse, error) {
 		const blenderMCPName = "blender"
 		const executeCodeTool = "execute_blender_code"
-
-		// Get the global MCP manager (initialize if needed)
-		if globalMCPManager == nil {
-			globalMCPManager = NewMCPClientManager()
-		}
-		mcpManager := globalMCPManager
 
 		// Get Blender MCP configuration
 		mcpConfig, exists := config.Get().MCPServers[blenderMCPName]
@@ -70,7 +65,7 @@ func createBlenderExecutor() tools.BlenderCodeExecutor {
 		}
 
 		// Get MCP client
-		client, err := mcpManager.GetClient(ctx, blenderMCPName, mcpConfig)
+		client, err := manager.GetClient(ctx, blenderMCPName, mcpConfig)
 		if err != nil {
 			return tools.NewTextErrorResponse(fmt.Sprintf("error connecting to Blender MCP: %s", err)), nil
 		}

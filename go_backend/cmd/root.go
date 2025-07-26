@@ -143,7 +143,10 @@ func initMCPTools(ctx context.Context, app *app.App) {
 		defer cancel()
 
 		// Set this up once with proper error handling
-		agent.GetMcpTools(ctxWithTimeout, app.Permissions)
+		// Create temporary manager for initial MCP setup
+		tempManager := agent.NewMCPClientManager()
+		defer tempManager.Close()
+		agent.GetMcpTools(ctxWithTimeout, app.Permissions, tempManager)
 		logging.Info("MCP message handling goroutine exiting")
 	}()
 }

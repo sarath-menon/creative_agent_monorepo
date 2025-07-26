@@ -258,17 +258,15 @@ func shouldIncludeTool(toolName string, allowedTools []string, deniedTools []str
 	return true
 }
 
-var mcpTools []tools.BaseTool
-var globalMCPManager *MCPClientManager
 
 func getTools(ctx context.Context, name string, m config.MCPServer, permissions permission.Service, manager *MCPClientManager) []tools.BaseTool {
-	var stdioTools []tools.BaseTool
+	var mcpTools []tools.BaseTool
 
 	// Get client from manager (this will handle creation and initialization)
 	c, err := manager.GetClient(ctx, name, m)
 	if err != nil {
 		logging.Error("error getting mcp client", "server", name, "error", err)
-		return stdioTools
+		return mcpTools
 	}
 
 	// List tools from the initialized client
@@ -276,7 +274,7 @@ func getTools(ctx context.Context, name string, m config.MCPServer, permissions 
 	tools, err := c.ListTools(ctx, toolsRequest)
 	if err != nil {
 		logging.Error("error listing tools", "server", name, "error", err)
-		return stdioTools
+		return mcpTools
 	}
 
 	// Create tool instances with the manager, applying filtering if configured
@@ -285,36 +283,20 @@ func getTools(ctx context.Context, name string, m config.MCPServer, permissions 
 		
 		// Apply tool filtering based on configuration
 		if shouldIncludeTool(toolName, m.AllowedTools, m.DeniedTools) {
-			stdioTools = append(stdioTools, NewMcpTool(name, t, permissions, m, manager))
+			mcpTools = append(mcpTools, NewMcpTool(name, t, permissions, m, manager))
 		}
-	}
-
-	return stdioTools
-}
-
-func GetMcpTools(ctx context.Context, permissions permission.Service) []tools.BaseTool {
-	if len(mcpTools) > 0 {
-		return mcpTools
-	}
-
-	// Initialize the global manager if not already done
-	if globalMCPManager == nil {
-		globalMCPManager = NewMCPClientManager()
-	}
-
-	for name, m := range config.Get().MCPServers {
-		mcpTools = append(mcpTools, getTools(ctx, name, m, permissions, globalMCPManager)...)
 	}
 
 	return mcpTools
 }
 
-// ShutdownMCPManager closes all MCP clients and cleans up resources
-func ShutdownMCPManager() {
-	if globalMCPManager != nil {
-		globalMCPManager.Close()
-		globalMCPManager = nil
+func GetMcpTools(ctx context.Context, permissions permission.Service, manager *MCPClientManager) []tools.BaseTool {
+	var allTools []tools.BaseTool
+
+	for name, m := range config.Get().MCPServers {
+		allTools = append(allTools, getTools(ctx, name, m, permissions, manager)...)
 	}
-	// Clear the cached tools so they can be recreated with a new manager if needed
-	mcpTools = nil
+
+	return allTools
 }
+

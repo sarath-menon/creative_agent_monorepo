@@ -42,6 +42,9 @@ func New(ctx context.Context, conn *sql.DB) (*App, error) {
 		Permissions: permission.NewPermissionService(),
 	}
 
+	// Create MCP manager for this agent
+	mcpManager := agent.NewMCPClientManager()
+	
 	var err error
 	app.CoderAgent, err = agent.NewAgent(
 		config.AgentMain,
@@ -52,6 +55,7 @@ func New(ctx context.Context, conn *sql.DB) (*App, error) {
 			app.Sessions,
 			app.Messages,
 			app.History,
+			mcpManager,
 		),
 	)
 	if err != nil {

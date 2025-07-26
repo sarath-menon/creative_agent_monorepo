@@ -478,7 +478,10 @@ func (h *QueryHandler) handleToolsList(ctx context.Context, req *QueryRequest) *
 	}
 
 	// Add MCP tools
-	mcpTools := agent.GetMcpTools(ctx, h.app.Permissions)
+	// Create temporary manager for informational listing
+	tempManager := agent.NewMCPClientManager()
+	defer tempManager.Close()
+	mcpTools := agent.GetMcpTools(ctx, h.app.Permissions, tempManager)
 	for _, tool := range mcpTools {
 		info := tool.Info()
 		builtinTools = append(builtinTools, ToolData{
@@ -511,7 +514,10 @@ func (h *QueryHandler) handleMCPList(ctx context.Context, req *QueryRequest) *Qu
 	}
 
 	// Get MCP tools to check connection status and group by server
-	mcpTools := agent.GetMcpTools(ctx, h.app.Permissions)
+	// Create temporary manager for informational listing
+	tempManager2 := agent.NewMCPClientManager()
+	defer tempManager2.Close()
+	mcpTools := agent.GetMcpTools(ctx, h.app.Permissions, tempManager2)
 
 	// Group tools by server name
 	serverTools := make(map[string][]tools.BaseTool)
