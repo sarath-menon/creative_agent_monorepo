@@ -28,18 +28,19 @@ import {
   AIToolStep,
   type AIToolStatus,
 } from '@/components/ui/kibo-ui/ai/tool';
-import { GlobeIcon, MicIcon, PlusIcon, Play, Square, Command, HelpCircle, FileIcon, FolderIcon } from 'lucide-react';
+import { GlobeIcon, MicIcon, PlusIcon, Play, Square, Command, HelpCircle, FileIcon, FolderIcon, ImageIcon } from 'lucide-react';
 import { IconEdit } from '@tabler/icons-react';
-import { type FormEventHandler, useState, useEffect, useRef } from 'react';
+import { type FormEventHandler, useState, useEffect, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 import { useSession, useCreateSession } from '@/hooks/useSession';
 import { useSendMessage } from '@/hooks/useMessages';
 import { usePersistentSSE } from '@/hooks/usePersistentSSE';
 import { useFileSystem, type FileEntry } from '@/hooks/useFileSystem';
 import { useOpenApps } from '@/hooks/useOpenApps';
+import { useMediaHandler, type MediaItem } from '@/hooks/useMediaHandler';
 import { LoadingDots } from './loading-dots';
+import { MediaPreview } from './media-preview';
 import { Badge } from '@/components/ui/badge';
 
 
@@ -68,6 +69,7 @@ type Message = {
   content: string;
   from: 'user' | 'assistant';
   toolCalls?: ToolCall[];
+  media?: MediaItem[];
 };
 
 export function ChatApp() {
@@ -87,6 +89,16 @@ export function ChatApp() {
   const sseStream = usePersistentSSE(session?.id || '');
   const { currentFiles, isLoading: filesLoading, error: filesError, fetchFiles } = useFileSystem();
   const { apps: openApps, isLoading: appsLoading, error: appsError } = useOpenApps();
+  const { 
+    attachedMedia, 
+    isDragOver, 
+    handleOpenFileDialog, 
+    handleDragOver, 
+    handleDragLeave, 
+    handleDrop, 
+    removeMediaItem, 
+    clearMedia 
+  } = useMediaHandler();
   
   // Filter apps to only show specified ones
   const allowedApps = ['Notes', 'Obsidian', 'Blender', 'Pixelmator Pro'];
@@ -261,15 +273,24 @@ export function ChatApp() {
     const messageText = text;
     
     // Add user message to conversation and clear input immediately
-    setMessages(prev => [...prev, { content: messageText, from: 'user' }]);
+    setMessages(prev => [...prev, { 
+      content: messageText, 
+      from: 'user',
+      media: attachedMedia.length > 0 ? attachedMedia : undefined
+    }]);
     setText('');
+    clearMedia();
     
     // Reset interrupted message guard for new message
     interruptedMessageAddedRef.current = false;
     
     // Send message via persistent SSE
     try {
-      await sseStream.sendMessage(messageText);
+      const messageData = {
+        text: messageText,
+        media: attachedMedia.length > 0 ? attachedMedia.map(m => m.path) : undefined
+      };
+      await sseStream.sendMessage(JSON.stringify(messageData));
     } catch (error) {
       console.error('Failed to send message:', error);
       // Error will be handled by the error useEffect
@@ -295,6 +316,7 @@ export function ChatApp() {
       await createSession.mutateAsync({ title: "Chat Session" });
       setMessages([]);
       setText('');
+      clearMedia();
       interruptedMessageAddedRef.current = false;
     } catch (error) {
       console.error('Failed to create new session:', error);
@@ -306,9 +328,9 @@ export function ChatApp() {
                       sseStream.processing ? 'streaming' : 
                       sseStream.error ? 'error' : 'ready';
   
-  // Ready state: need text and connection. Other states: only need connection for pause/resume
+  // Ready state: need text/media and connection. Other states: only need connection for pause/resume
   const isSubmitDisabled = buttonStatus === 'ready' 
-    ? (!text || !session?.id || sessionLoading || !sseStream.connected)
+    ? ((!text && attachedMedia.length === 0) || !session?.id || sessionLoading || !sseStream.connected)
     : (!session?.id || sessionLoading || !sseStream.connected);
 
   return (
@@ -334,7 +356,29 @@ export function ChatApp() {
                 {message.from === 'assistant' ? (
                   <AIResponse>{message.content}</AIResponse>
                 ) : (
-                  message.content
+                  <div>
+                    {message.media && message.media.length > 0 && (
+                      <div className="flex flex-wrap gap-2 mb-2">
+                        {message.media.map((media, index) => (
+                          <div key={index} className="relative">
+                            {media.type === 'image' ? (
+                              <img 
+                                src={media.preview} 
+                                alt={media.name}
+                                className="max-w-xs max-h-48 object-cover rounded-lg"
+                              />
+                            ) : (
+                              <div className="flex items-center gap-2 bg-stone-700/50 rounded-lg p-3">
+                                <ImageIcon className="w-6 h-6 text-stone-400" />
+                                <span className="text-sm text-stone-300">{media.name}</span>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {message.content}
+                  </div>
                 )}
                 {message.toolCalls && message.toolCalls.length > 0 && (
                   <AIToolLadder className="mt-4">
@@ -438,8 +482,15 @@ export function ChatApp() {
 
       {/* AI Input Section */}
       <div className="max-w-4xl mx-auto w-full relative">
-        <AIInput onSubmit={handleSubmit} className='bg-stone-600/20 border-neutral-600 border-[0.5px]'>
-          <AIInputTextarea
+        <div
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+          className={`relative ${isDragOver ? 'ring-2 ring-blue-500 ring-opacity-50' : ''}`}
+        >
+          <AIInput onSubmit={handleSubmit} className='bg-stone-600/20 border-neutral-600 border-[0.5px]'>
+            <MediaPreview attachedMedia={attachedMedia} onRemoveItem={removeMediaItem} />
+            <AIInputTextarea
             onChange={(e) => {
               handleTextChange(e.target.value);
               if (!inputElement) {
@@ -456,10 +507,10 @@ export function ChatApp() {
                 : text.includes('@') 
                   ? 'text-purple-400' // File reference
                   : ''
-            } />
+            } autoFocus/>
           <AIInputToolbar>
             <AIInputTools>
-              <AIInputButton>
+              <AIInputButton onClick={handleOpenFileDialog}>
                 <PlusIcon className='size-6' />
               </AIInputButton>
               <AIInputButton>
@@ -475,6 +526,7 @@ export function ChatApp() {
             />
           </AIInputToolbar>
         </AIInput>
+        </div>
         
         {/* Slash Command Dropdown */}
         {showSlashCommands && (

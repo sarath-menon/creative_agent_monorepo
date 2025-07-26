@@ -17,6 +17,10 @@
     },
     "fs:default",
     "fs:allow-read-dir",
-    "fs:allow-exists"
+    "fs:allow-exists",
+    {
+      "identifier": "fs:allow-read-file",
+      "allow": [{ "path": "$HOME/**/*" }]
+    }
   ]
 }

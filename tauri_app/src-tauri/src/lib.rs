@@ -168,6 +168,7 @@ pub fn run() {
     // let sidecar_manager = Arc::new(SidecarManager::new());
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         // .manage(sidecar_manager.clone())
         .plugin(tauri_plugin_opener::init())
