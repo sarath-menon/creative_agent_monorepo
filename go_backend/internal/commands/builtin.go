@@ -2,16 +2,104 @@ package commands
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
-	"time"
 
 	"go_general_agent/internal/app"
 	"go_general_agent/internal/config"
 	"go_general_agent/internal/llm/agent"
 	"go_general_agent/internal/llm/tools"
 )
+
+// ContextResponse represents the JSON response for the /context command
+type ContextResponse struct {
+	Model          string               `json:"model"`
+	MaxTokens      int64                `json:"maxTokens"`
+	TotalTokens    int64                `json:"totalTokens"`
+	UsagePercent   float64              `json:"usagePercent"`
+	Components     []ComponentBreakdown `json:"components"`
+	WarningLevel   string               `json:"warningLevel,omitempty"`
+	WarningMessage string               `json:"warningMessage,omitempty"`
+}
+
+// ComponentBreakdown represents individual context component usage
+type ComponentBreakdown struct {
+	Name       string  `json:"name"`
+	Tokens     int64   `json:"tokens"`
+	Percentage float64 `json:"percentage"`
+	IsTotal    bool    `json:"isTotal,omitempty"`
+}
+
+// HelpResponse represents the JSON response for the /help command
+type HelpResponse struct {
+	Type     string        `json:"type"`
+	Commands []HelpCommand `json:"commands"`
+}
+
+// HelpCommand represents a command in the help response
+type HelpCommand struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Usage       string `json:"usage"`
+}
+
+// SessionResponse represents the JSON response for the /session command
+type SessionResponse struct {
+	Type              string  `json:"type"`
+	ID                string  `json:"id"`
+	Title             string  `json:"title"`
+	MessageCount      int64   `json:"messageCount"`
+	TotalTokens       int64   `json:"totalTokens"`
+	PromptTokens      int64   `json:"promptTokens"`
+	CompletionTokens  int64   `json:"completionTokens"`
+	Cost              float64 `json:"cost"`
+	CreatedAt         int64   `json:"createdAt"`
+	UpdatedAt         int64   `json:"updatedAt"`
+	ParentSessionID   string  `json:"parentSessionId,omitempty"`
+}
+
+// McpResponse represents the JSON response for the /mcp command
+type McpResponse struct {
+	Type    string      `json:"type"`
+	Servers []McpServer `json:"servers"`
+}
+
+// McpServer represents an MCP server in the response
+type McpServer struct {
+	Name      string    `json:"name"`
+	Status    string    `json:"status"`
+	Connected bool      `json:"connected"`
+	ToolCount int       `json:"toolCount"`
+	Tools     []McpTool `json:"tools"`
+}
+
+// McpTool represents a tool available from an MCP server
+type McpTool struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+}
+
+// SessionsResponse represents the JSON response for the /sessions command
+type SessionsResponse struct {
+	Type           string           `json:"type"`
+	CurrentSession string           `json:"currentSession,omitempty"`
+	Sessions       []SessionSummary `json:"sessions"`
+}
+
+// SessionSummary represents a session summary in the sessions list
+type SessionSummary struct {
+	ID               string  `json:"id"`
+	Title            string  `json:"title"`
+	MessageCount     int64   `json:"messageCount"`
+	TotalTokens      int64   `json:"totalTokens"`
+	Cost             float64 `json:"cost"`
+	CreatedAt        int64   `json:"createdAt"`
+	UpdatedAt        int64   `json:"updatedAt"`
+	ParentSessionID  string  `json:"parentSessionId,omitempty"`
+	IsCurrent        bool    `json:"isCurrent"`
+}
 
 // BuiltinCommand represents a built-in command
 type BuiltinCommand struct {
@@ -53,45 +141,60 @@ func GetBuiltinCommands(registry *Registry, app *app.App) map[string]Command {
 		"sessions": &BuiltinCommand{
 			name:        "sessions",
 			description: "List all available sessions",
-			handler:     createSessionsHandler(),
+			handler:     createSessionsHandler(app),
 		},
 		"mcp": &BuiltinCommand{
 			name:        "mcp",
 			description: "List configured MCP servers",
 			handler:     createMcpHandler(),
 		},
+		"context": &BuiltinCommand{
+			name:        "context",
+			description: "Show context usage breakdown with percentages",
+			handler:     createContextHandler(app),
+		},
 	}
 }
 
 func createHelpHandler(registry *Registry) func(ctx context.Context, args string) (string, error) {
 	return func(ctx context.Context, args string) (string, error) {
-		var result strings.Builder
-		result.WriteString("Available slash commands:\n\n")
-
 		// Get all commands from registry
 		commands := registry.GetAllCommands()
 
-		// Sort command names
-		var names []string
-		for name := range commands {
-			names = append(names, name)
-		}
-		sort.Strings(names)
-
-		// Format commands
-		for _, name := range names {
-			cmd := commands[name]
-			result.WriteString(fmt.Sprintf("/%s - %s\n", name, cmd.Description()))
+		// Build commands slice
+		var helpCommands []HelpCommand
+		for name, cmd := range commands {
+			helpCommands = append(helpCommands, HelpCommand{
+				Name:        name,
+				Description: cmd.Description(),
+				Usage:       fmt.Sprintf("/%s", name),
+			})
 		}
 
-		result.WriteString("\nType /help <command> for more details about a specific command.")
-		return result.String(), nil
+		// Sort commands alphabetically by name
+		sort.Slice(helpCommands, func(i, j int) bool {
+			return helpCommands[i].Name < helpCommands[j].Name
+		})
+
+		// Create structured response
+		response := HelpResponse{
+			Type:     "help",
+			Commands: helpCommands,
+		}
+
+		// Convert to JSON
+		jsonData, err := json.Marshal(response)
+		if err != nil {
+			return fmt.Sprintf("Error marshaling help data: %v", err), nil
+		}
+
+		return string(jsonData), nil
 	}
 }
 
 func createClearHandler() func(ctx context.Context, args string) (string, error) {
 	return func(ctx context.Context, args string) (string, error) {
-		return "Chat history cleared. Note: This command is only functional in interactive modes.", nil
+		return "", nil
 	}
 }
 
@@ -109,40 +212,28 @@ func createSessionHandler(app *app.App) func(ctx context.Context, args string) (
 				return "No active session. Use /sessions to list available sessions.", nil
 			}
 			
-			var result strings.Builder
-			result.WriteString("## Current Session Information\n\n")
-			result.WriteString(fmt.Sprintf("- **ID:** %s\n", currentSession.ID))
-			result.WriteString(fmt.Sprintf("- **Title:** %s\n", currentSession.Title))
-			result.WriteString(fmt.Sprintf("- **Messages:** %d\n", currentSession.MessageCount))
-			
-			// Format tokens in K with input/output split
-			totalTokens := currentSession.PromptTokens + currentSession.CompletionTokens
-			totalK := float64(totalTokens) / 1000.0
-			inputK := float64(currentSession.PromptTokens) / 1000.0
-			outputK := float64(currentSession.CompletionTokens) / 1000.0
-			
-			if totalTokens > 0 {
-				result.WriteString(fmt.Sprintf("- **Tokens:** %.1fK (%.1fK in / %.1fK out)\n", totalK, inputK, outputK))
-			} else {
-				result.WriteString("- **Tokens:** 0\n")
-			}
-			result.WriteString(fmt.Sprintf("- **Cost:** $%.4f\n", currentSession.Cost))
-			
-			if currentSession.CreatedAt > 0 {
-				createdTime := time.Unix(currentSession.CreatedAt, 0)
-				result.WriteString(fmt.Sprintf("- **Created:** %s\n", createdTime.Format("2006-01-02 15:04:05")))
+			// Create structured response
+			response := SessionResponse{
+				Type:             "session",
+				ID:               currentSession.ID,
+				Title:            currentSession.Title,
+				MessageCount:     currentSession.MessageCount,
+				TotalTokens:      currentSession.PromptTokens + currentSession.CompletionTokens,
+				PromptTokens:     currentSession.PromptTokens,
+				CompletionTokens: currentSession.CompletionTokens,
+				Cost:             currentSession.Cost,
+				CreatedAt:        currentSession.CreatedAt,
+				UpdatedAt:        currentSession.UpdatedAt,
+				ParentSessionID:  currentSession.ParentSessionID,
 			}
 			
-			if currentSession.UpdatedAt > 0 {
-				updatedTime := time.Unix(currentSession.UpdatedAt, 0)
-				result.WriteString(fmt.Sprintf("- **Last Updated:** %s\n", updatedTime.Format("2006-01-02 15:04:05")))
+			// Convert to JSON
+			jsonData, err := json.Marshal(response)
+			if err != nil {
+				return fmt.Sprintf("Error marshaling session data: %v", err), nil
 			}
 			
-			if currentSession.ParentSessionID != "" {
-				result.WriteString(fmt.Sprintf("- **Parent Session:** %s\n", currentSession.ParentSessionID))
-			}
-			
-			return result.String(), nil
+			return string(jsonData), nil
 		} else {
 			// Switch to specific session
 			return fmt.Sprintf("Session switching to '%s' is available via the HTTP API.", args), nil
@@ -150,9 +241,47 @@ func createSessionHandler(app *app.App) func(ctx context.Context, args string) (
 	}
 }
 
-func createSessionsHandler() func(ctx context.Context, args string) (string, error) {
+func createSessionsHandler(app *app.App) func(ctx context.Context, args string) (string, error) {
 	return func(ctx context.Context, args string) (string, error) {
-		return "Session listing is available via the HTTP API or database queries. Use '--query sessions' for programmatic access.", nil
+		// Get all sessions from the database
+		sessions, err := app.Sessions.List(ctx)
+		if err != nil {
+			return fmt.Sprintf("Error retrieving sessions: %v", err), nil
+		}
+
+		// Get current session ID for comparison
+		currentSessionID := app.GetCurrentSessionID()
+
+		// Build session summaries
+		var sessionSummaries []SessionSummary
+		for _, session := range sessions {
+			sessionSummaries = append(sessionSummaries, SessionSummary{
+				ID:              session.ID,
+				Title:           session.Title,
+				MessageCount:    session.MessageCount,
+				TotalTokens:     session.PromptTokens + session.CompletionTokens,
+				Cost:            session.Cost,
+				CreatedAt:       session.CreatedAt,
+				UpdatedAt:       session.UpdatedAt,
+				ParentSessionID: session.ParentSessionID,
+				IsCurrent:       session.ID == currentSessionID,
+			})
+		}
+
+		// Create structured response
+		response := SessionsResponse{
+			Type:           "sessions",
+			CurrentSession: currentSessionID,
+			Sessions:       sessionSummaries,
+		}
+
+		// Convert to JSON
+		jsonData, err := json.Marshal(response)
+		if err != nil {
+			return fmt.Sprintf("Error marshaling sessions data: %v", err), nil
+		}
+
+		return string(jsonData), nil
 	}
 }
 
@@ -163,9 +292,6 @@ func createMcpHandler() func(ctx context.Context, args string) (string, error) {
 		if len(cfg.MCPServers) == 0 {
 			return "No MCP servers configured.\n\nTo configure MCP servers, add them to your configuration file under 'mcpServers'.", nil
 		}
-
-		var result strings.Builder
-		result.WriteString("Available MCP servers:\n\n")
 
 		// Sort server names for consistent output
 		var serverNames []string
@@ -189,29 +315,23 @@ func createMcpHandler() func(ctx context.Context, args string) (string, error) {
 			}
 		}
 
+		// Build server data
+		var servers []McpServer
 		for _, name := range serverNames {
 			tools := serverTools[name]
 			
 			// Determine connection status
-			var statusIcon, statusText string
-			if len(tools) > 0 {
-				statusIcon = "✓"
+			var statusText string
+			connected := len(tools) > 0
+			if connected {
 				statusText = "connected"
 			} else {
-				statusIcon = "✗"
 				statusText = "failed"
 			}
 
-			// Server header
-			result.WriteString(fmt.Sprintf("• %s %s %s\n", name, statusIcon, statusText))
-
-			// Show tools if connected
+			// Build tool list
+			var mcpTools []McpTool
 			if len(tools) > 0 {
-				result.WriteString(fmt.Sprintf("  %d tool%s available:\n", len(tools), func() string {
-					if len(tools) == 1 { return "" }
-					return "s"
-				}()))
-
 				// Sort tools by name for consistent output
 				sort.Slice(tools, func(i, j int) bool {
 					return tools[i].Info().Name < tools[j].Info().Name
@@ -227,15 +347,131 @@ func createMcpHandler() func(ctx context.Context, args string) (string, error) {
 							toolName = parts[1]
 						}
 					}
-					// result.WriteString(fmt.Sprintf("    - %s: %s\n", toolName, info.Description))
-					result.WriteString(fmt.Sprintf("    - %s\n", toolName))
+					mcpTools = append(mcpTools, McpTool{
+						Name:        toolName,
+						Description: info.Description,
+					})
 				}
-			} else {
-				result.WriteString("  No tools available (connection failed)\n")
 			}
-			result.WriteString("\n")
+
+			servers = append(servers, McpServer{
+				Name:      name,
+				Status:    statusText,
+				Connected: connected,
+				ToolCount: len(tools),
+				Tools:     mcpTools,
+			})
 		}
 
-		return result.String(), nil
+		// Create structured response
+		response := McpResponse{
+			Type:    "mcp",
+			Servers: servers,
+		}
+
+		// Convert to JSON
+		jsonData, err := json.Marshal(response)
+		if err != nil {
+			return fmt.Sprintf("Error marshaling MCP data: %v", err), nil
+		}
+
+		return string(jsonData), nil
+	}
+}
+
+func createContextHandler(app *app.App) func(ctx context.Context, args string) (string, error) {
+	return func(ctx context.Context, args string) (string, error) {
+		currentSession, err := app.GetCurrentSession(ctx)
+		if err != nil {
+			return fmt.Sprintf("Error retrieving current session: %v", err), nil
+		}
+		
+		if currentSession == nil {
+			return "No active session. Use /sessions to list available sessions.", nil
+		}
+
+		// Get current model's context window from agent
+		currentModel := app.CoderAgent.Model()
+		maxContextTokens := int64(currentModel.ContextWindow)
+		
+		// System prompt estimation (rough approximation)
+		systemPromptTokens := int64(5000) // Typical system prompt size
+		systemPromptPercent := float64(systemPromptTokens) / float64(maxContextTokens) * 100
+
+		// Tool descriptions estimation
+		toolTokens := int64(15000) // Typical tool descriptions size
+		toolPercent := float64(toolTokens) / float64(maxContextTokens) * 100
+
+		// Calculate conversation tokens (excluding system overhead)
+		conversationTokens := currentSession.PromptTokens + currentSession.CompletionTokens
+		
+		// User and assistant message breakdown
+		userTokens := currentSession.PromptTokens
+		userPercent := float64(userTokens) / float64(maxContextTokens) * 100
+		
+		assistantTokens := currentSession.CompletionTokens
+		assistantPercent := float64(assistantTokens) / float64(maxContextTokens) * 100
+
+		// Calculate total tokens including baseline system context
+		baselineTokens := systemPromptTokens + toolTokens
+		totalTokens := baselineTokens + conversationTokens
+		contextUsagePercent := float64(totalTokens) / float64(maxContextTokens) * 100
+
+		// Determine warning level
+		warningLevel := "none"
+		warningMessage := ""
+		if contextUsagePercent > 80 {
+			warningLevel = "high"
+			warningMessage = "Context usage above 80% - consider starting a new session"
+		} else if contextUsagePercent > 60 {
+			warningLevel = "medium"
+			warningMessage = "Context usage above 60% - monitor usage"
+		}
+
+		// Create structured response
+		response := ContextResponse{
+			Model:          currentModel.Name,
+			MaxTokens:      maxContextTokens,
+			TotalTokens:    totalTokens,
+			UsagePercent:   contextUsagePercent,
+			WarningLevel:   warningLevel,
+			WarningMessage: warningMessage,
+			Components: []ComponentBreakdown{
+				{
+					Name:       "System Prompt",
+					Tokens:     systemPromptTokens,
+					Percentage: systemPromptPercent,
+				},
+				{
+					Name:       "Tool Descriptions",
+					Tokens:     toolTokens,
+					Percentage: toolPercent,
+				},
+				{
+					Name:       "User Messages",
+					Tokens:     userTokens,
+					Percentage: userPercent,
+				},
+				{
+					Name:       "Assistant Responses",
+					Tokens:     assistantTokens,
+					Percentage: assistantPercent,
+				},
+				{
+					Name:       "Total",
+					Tokens:     totalTokens,
+					Percentage: contextUsagePercent,
+					IsTotal:    true,
+				},
+			},
+		}
+
+		// Convert to JSON
+		jsonData, err := json.Marshal(response)
+		if err != nil {
+			return fmt.Sprintf("Error marshaling context data: %v", err), nil
+		}
+
+		return string(jsonData), nil
 	}
 }

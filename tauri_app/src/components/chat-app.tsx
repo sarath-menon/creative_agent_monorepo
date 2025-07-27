@@ -43,17 +43,19 @@ import { useMessageHistory } from '@/hooks/useMessageHistory';
 import { LoadingDots } from './loading-dots';
 import { MediaPreview } from './media-preview';
 import { Badge } from '@/components/ui/badge';
+import { ContextDisplay } from './context-display';
+import { HelpDisplay } from './help-display';
+import { SessionDisplay } from './session-display';
+import { SessionsDisplay } from './sessions-display';
+import { McpDisplay } from './mcp-display';
 
-
-const models = [
-  { id: 'gpt-4', name: 'GPT-4' },
-  { id: 'gpt-3.5-turbo', name: 'GPT-3.5 Turbo' },
-];
 
 const slashCommands = [
   { id: 'help', name: 'help', description: 'Get assistance and guidance', icon: HelpCircle },
   { id: 'mcp', name: 'mcp', description: 'Model Context Protocol', icon: Command },
   { id: 'session', name: 'session', description: 'User Session Management', icon: Command },
+  { id: 'sessions', name: 'sessions', description: 'List all available sessions', icon: Command },
+  { id: 'context', name: 'context', description: 'Show context usage breakdown', icon: Command },
 ];
 
 type ToolCall = {
@@ -74,7 +76,6 @@ type Message = {
 
 export function ChatApp() {
   const [text, setText] = useState<string>('');
-  const [model, setModel] = useState<string>(models[0].id);
   const [messages, setMessages] = useState<Message[]>([]);
   const [showSlashCommands, setShowSlashCommands] = useState(false);
   const [selectedCommandIndex, setSelectedCommandIndex] = useState(0);
@@ -82,6 +83,51 @@ export function ChatApp() {
   const [selectedFileIndex, setSelectedFileIndex] = useState(0);
   const [inputElement, setInputElement] = useState<HTMLTextAreaElement | null>(null);
   const interruptedMessageAddedRef = useRef(false);
+
+  // Helper function to parse and render structured JSON responses
+  const renderResponseContent = (content: string) => {
+    // Handle empty responses (e.g., from /clear command)
+    if (!content || content.trim() === '') {
+      return null;
+    }
+    
+    // All slash commands return JSON, parse and route to appropriate component
+    try {
+      const parsedData = JSON.parse(content);
+      
+      // Check if it's a context response by looking for expected fields
+      if (parsedData.model && parsedData.components && Array.isArray(parsedData.components)) {
+        return <ContextDisplay data={parsedData} />;
+      }
+      
+      // Check if it's a help response by looking for type field
+      if (parsedData.type === 'help' && parsedData.commands && Array.isArray(parsedData.commands)) {
+        return <HelpDisplay data={parsedData} />;
+      }
+      
+      // Check if it's a session response by looking for type field
+      if (parsedData.type === 'session' && parsedData.id) {
+        return <SessionDisplay data={parsedData} />;
+      }
+      
+      // Check if it's a sessions response by looking for type field
+      if (parsedData.type === 'sessions' && parsedData.sessions && Array.isArray(parsedData.sessions)) {
+        return <SessionsDisplay data={parsedData} />;
+      }
+      
+      // Check if it's an MCP response by looking for type field
+      if (parsedData.type === 'mcp' && parsedData.servers && Array.isArray(parsedData.servers)) {
+        return <McpDisplay data={parsedData} />;
+      }
+      
+      // If we reach here, it's an unknown JSON structure - log and render as text
+      console.warn('Unknown JSON response structure:', parsedData);
+      return <AIResponse>{content}</AIResponse>;
+    } catch (error) {
+      // If JSON parsing fails, it's likely regular chat content
+      return <AIResponse>{content}</AIResponse>;
+    }
+  };
 
   // History navigation state
   const [historyIndex, setHistoryIndex] = useState(-1);
@@ -149,11 +195,10 @@ export function ChatApp() {
     }
   };
 
-  const handleSlashCommandSelect = (command: typeof slashCommands[0]) => {
-    const commandText = `/${command.name} `;
-    setText(commandText);
+  const handleSlashCommandSelect = async (command: typeof slashCommands[0]) => {
+    const commandText = `/${command.name}`;
     setShowSlashCommands(false);
-    inputElement?.focus();
+    await submitMessage(commandText);
   };
 
   const handleFileSelect = (file: FileEntry) => {
@@ -355,13 +400,10 @@ export function ChatApp() {
     }
   }, [sseStream.isPaused, sseStream.processing]);
 
-  const handleSubmit: FormEventHandler<HTMLFormElement> = async (event) => {
-    event.preventDefault();
-    if (!text || !session?.id || !sseStream.connected) {
+  const submitMessage = async (messageText: string) => {
+    if (!messageText || !session?.id || !sseStream.connected) {
       return;
     }
-    
-    const messageText = text;
     
     // Exit history mode if active
     if (isInHistoryMode) {
@@ -393,6 +435,11 @@ export function ChatApp() {
       console.error('Failed to send message:', error);
       // Error will be handled by the error useEffect
     }
+  };
+
+  const handleSubmit: FormEventHandler<HTMLFormElement> = async (event) => {
+    event.preventDefault();
+    await submitMessage(text);
   };
 
   // Handle pause/resume button clicks
@@ -452,7 +499,7 @@ export function ChatApp() {
             <AIMessage from={message.from} key={index}>
               <AIMessageContent >
                 {message.from === 'assistant' ? (
-                  <AIResponse>{message.content}</AIResponse>
+                  renderResponseContent(message.content)
                 ) : (
                   <div>
                     {message.media && message.media.length > 0 && (
