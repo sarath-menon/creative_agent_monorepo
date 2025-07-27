@@ -8,14 +8,9 @@ Usage:
 files), but it's recommended to read the whole file by not providing these parameters
 - Any lines longer than 2000 characters will be truncated
 - Results are returned using cat -n format, with line numbers starting at 1
-- This tool allows you to read images (eg PNG, JPG, etc). When reading an
-image file the contents are presented visually as Claude Code is a multimodal LLM.
+- This tool detects image, video, and audio files but returns only metadata (file type, path, and size) rather than content to avoid context overflow. Use the multimodal-analyzer tool if you want to analyze the actual content.
 - You have the capability to call multiple tools in a single response. It is always
 better to speculatively read multiple files as a batch that are potentially useful.
-- You will regularly be asked to read screenshots. If the user provides a path to a
-screenshot ALWAYS use this tool to view the file at the path. This tool will work
-with all temporary file paths like
-/var/folders/123/abc/T/TemporaryItems/NSIRD_screencaptureui_ZfB1tD/Screenshot.png
 - If you read a file that exists but has empty contents you will receive a system
 reminder warning in place of file contents.
 

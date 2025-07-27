@@ -129,7 +129,7 @@ func (v *viewTool) Run(ctx context.Context, call ToolCall) (ToolResponse, error)
 		}
 
 		// Return text description instead of base64 data to avoid context overflow
-		imageDescription := fmt.Sprintf("Image file (%s) at %s\nFile size: %d bytes\nTo analyze this image, you would need to process it with an image analysis tool.",
+		imageDescription := fmt.Sprintf("Image file (%s) at %s\nFile size: %d bytes\n",
 			imageType, filePath, fileInfo.Size())
 
 		recordFileRead(filePath)
@@ -138,6 +138,52 @@ func (v *viewTool) Run(ctx context.Context, call ToolCall) (ToolResponse, error)
 			ViewResponseMetadata{
 				FilePath: filePath,
 				Content:  imageDescription,
+			},
+		), nil
+	}
+
+	// Check if it's a video file
+	isVideo, videoType := isVideoFile(filePath)
+	if isVideo {
+		// Get video file info
+		fileInfo, err := os.Stat(filePath)
+		if err != nil {
+			return ToolResponse{}, fmt.Errorf("error getting video file info: %w", err)
+		}
+
+		// Return text description instead of video data to avoid context overflow
+		videoDescription := fmt.Sprintf("Video file (%s) at %s\nFile size: %d bytes\n",
+			videoType, filePath, fileInfo.Size())
+
+		recordFileRead(filePath)
+		return WithResponseMetadata(
+			NewTextResponse(videoDescription),
+			ViewResponseMetadata{
+				FilePath: filePath,
+				Content:  videoDescription,
+			},
+		), nil
+	}
+
+	// Check if it's an audio file
+	isAudio, audioType := isAudioFile(filePath)
+	if isAudio {
+		// Get audio file info
+		fileInfo, err := os.Stat(filePath)
+		if err != nil {
+			return ToolResponse{}, fmt.Errorf("error getting audio file info: %w", err)
+		}
+
+		// Return text description instead of audio data to avoid context overflow
+		audioDescription := fmt.Sprintf("Audio file (%s) at %s\nFile size: %d bytes\n",
+			audioType, filePath, fileInfo.Size())
+
+		recordFileRead(filePath)
+		return WithResponseMetadata(
+			NewTextResponse(audioDescription),
+			ViewResponseMetadata{
+				FilePath: filePath,
+				Content:  audioDescription,
 			},
 		), nil
 	}
@@ -267,6 +313,52 @@ func isImageFile(filePath string) (bool, string) {
 		return true, "SVG"
 	case ".webp":
 		return true, "WebP"
+	default:
+		return false, ""
+	}
+}
+
+func isVideoFile(filePath string) (bool, string) {
+	ext := strings.ToLower(filepath.Ext(filePath))
+	switch ext {
+	case ".mp4":
+		return true, "MP4"
+	case ".mov":
+		return true, "MOV"
+	case ".avi":
+		return true, "AVI"
+	case ".mkv":
+		return true, "MKV"
+	case ".webm":
+		return true, "WebM"
+	case ".wmv":
+		return true, "WMV"
+	case ".m4v":
+		return true, "M4V"
+	case ".flv":
+		return true, "FLV"
+	default:
+		return false, ""
+	}
+}
+
+func isAudioFile(filePath string) (bool, string) {
+	ext := strings.ToLower(filepath.Ext(filePath))
+	switch ext {
+	case ".wav":
+		return true, "WAV"
+	case ".mp3":
+		return true, "MP3"
+	case ".flac":
+		return true, "FLAC"
+	case ".ogg":
+		return true, "OGG"
+	case ".aac":
+		return true, "AAC"
+	case ".m4a":
+		return true, "M4A"
+	case ".wma":
+		return true, "WMA"
 	default:
 		return false, ""
 	}
