@@ -6,7 +6,7 @@ import type {
   HTMLAttributes,
   KeyboardEventHandler,
 } from 'react';
-import { Children, useCallback, useEffect, useRef } from 'react';
+import { Children, useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Select,
@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
+import { TextParser, Token, TokenType } from '@/lib/textParser';
 
 type UseAutoResizeTextareaProps = {
   minHeight: number;
@@ -88,14 +89,20 @@ export const AIInput = ({ className, ...props }: AIInputProps) => (
 export type AIInputTextareaProps = ComponentProps<typeof Textarea> & {
   minHeight?: number;
   maxHeight?: number;
+  availableFiles?: string[];
+  availableCommands?: string[];
 };
 
 export const AIInputTextarea = ({
   onChange,
+  onKeyDown,
   className,
   placeholder = 'What would you like to know?',
   minHeight = 48,
   maxHeight = 164,
+  value = '',
+  availableFiles = [],
+  availableCommands = [],
   ...props
 }: AIInputTextareaProps) => {
   const { textareaRef, adjustHeight } = useAutoResizeTextarea({
@@ -103,34 +110,124 @@ export const AIInputTextarea = ({
     maxHeight,
   });
 
-  const handleKeyDown: KeyboardEventHandler<HTMLTextAreaElement> = (e) => {
-    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-      e.preventDefault();
-      const form = e.currentTarget.form;
-      if (form) {
-        form.requestSubmit();
-      }
+  const overlayRef = useRef<HTMLDivElement>(null);
+  const previousValueRef = useRef<string>(value || '');
+  
+  const parser = useMemo(() => new TextParser(availableFiles, availableCommands), [availableFiles, availableCommands]);
+  const tokens = useMemo(() => parser.parse(value || ''), [parser, value]);
+  
+  // Update ref when value changes from outside
+  useEffect(() => {
+    previousValueRef.current = value || '';
+  }, [value]);
+
+  const syncScroll = () => {
+    if (textareaRef.current && overlayRef.current) {
+      overlayRef.current.scrollTop = textareaRef.current.scrollTop;
+      overlayRef.current.scrollLeft = textareaRef.current.scrollLeft;
     }
   };
 
+  const handleKeyDown: KeyboardEventHandler<HTMLTextAreaElement> = (e) => {
+    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      e.currentTarget.form?.requestSubmit();
+      return;
+    }
+
+    const textarea = textareaRef.current;
+    if (textarea && (e.key === 'ArrowLeft' || e.key === 'ArrowRight') && textarea.selectionStart === textarea.selectionEnd) {
+      const newCursor = parser.handleArrowKey(e.key, textarea.selectionStart, tokens);
+      if (newCursor !== null) {
+        e.preventDefault();
+        textarea.setSelectionRange(newCursor, newCursor);
+        return;
+      }
+    }
+
+    onKeyDown?.(e);
+  };
+
+  const renderTokenOverlay = () => {
+    const hasSpecialTokens = tokens.some(token => token.type !== 'text');
+    if (!hasSpecialTokens) return null;
+
+    return (
+      <div
+        ref={overlayRef}
+        className="absolute inset-0 pointer-events-none overflow-hidden whitespace-pre-wrap break-words z-0"
+        style={{
+          font: 'inherit',
+          lineHeight: 'inherit',
+          padding: '12px',
+          color: 'transparent',
+        }}
+      >
+        {tokens.map((token, index) => (
+          <span
+            key={`${token.start}-${token.end}-${index}`}
+            className={token.type !== 'text' ? parser.getTokenStyle(token.type) : ''}
+            style={{ color: 'transparent' }}
+          >
+            {token.content}
+          </span>
+        ))}
+      </div>
+    );
+  };
+
   return (
-    <Textarea
-      className={cn(
-        'w-full resize-none rounded-none border-none p-3 shadow-none outline-none ring-0',
-        'bg-transparent dark:bg-transparent',
-        'focus-visible:ring-0',
-        className
-      )}
-      name="message"
-      onChange={(e) => {
-        adjustHeight();
-        onChange?.(e);
-      }}
-      onKeyDown={handleKeyDown}
-      placeholder={placeholder}
-      ref={textareaRef}
-      {...props}
-    />
+    <div className="relative">
+      {renderTokenOverlay()}
+      <Textarea
+        className={cn(
+          'w-full resize-none rounded-none border-none p-3 shadow-none outline-none ring-0',
+          'bg-transparent dark:bg-transparent relative z-10',
+          'focus-visible:ring-0 text-foreground',
+          className
+        )}
+        name="message"
+        onChange={(e) => {
+          adjustHeight();
+          
+          const newValue = e.target.value;
+          const previousValue = previousValueRef.current;
+          const textarea = textareaRef.current;
+          
+          // Only check for token deletion if text got shorter (actual deletion)
+          if (textarea && newValue.length < previousValue.length) {
+            const deletion = parser.handleDeletion(newValue, textarea.selectionStart);
+            if (deletion) {
+              // Update ref with the cleaned value first
+              previousValueRef.current = deletion.newText;
+              
+              // Set cursor position immediately
+              textarea.setSelectionRange(deletion.newCursor, deletion.newCursor);
+              
+              // Create cleaned event and call onChange
+              const cleanedEvent = {
+                ...e,
+                target: { ...e.target, value: deletion.newText },
+                currentTarget: { ...e.currentTarget, value: deletion.newText }
+              } as React.ChangeEvent<HTMLTextAreaElement>;
+              
+              onChange?.(cleanedEvent);
+              return;
+            }
+          }
+          
+          // Update ref with new value for normal changes
+          previousValueRef.current = newValue;
+          onChange?.(e);
+        }}
+        onKeyDown={handleKeyDown}
+        onScroll={syncScroll}
+        placeholder={placeholder}
+        ref={textareaRef}
+        value={value}
+        {...props}
+      />
+    </div>
   );
 };
 

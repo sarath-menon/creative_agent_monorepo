@@ -80,20 +80,24 @@ export const useFileReference = (text: string, setText: (text: string) => void, 
   const baseFiles = state.currentFolder ? state.folderContents : currentFiles;
   const files = getMediaFiles(baseFiles);
   
-  const lastWord = text.split(' ').pop() || '';
+  const lastWord = text.trim().split(/\s+/).pop() || '';
   const show = lastWord.startsWith('@') && !lastWord.includes('/');
   
   useEffect(() => {
-    if (lastWord === '@') fetchFiles();
-  }, [lastWord, fetchFiles]);
+    if (show) {
+      fetchFiles();
+    }
+  }, [show, fetchFiles]);
   
   useEffect(() => {
     dispatch({ type: 'RESET_SELECTION' });
-  }, [show, files.length]);
+  }, [files.length]);
 
   useEffect(() => {
-    if (show) dispatch({ type: 'RESET_STATE' });
-  }, [show]);
+    if (show && !state.currentFolder) {
+      dispatch({ type: 'RESET_STATE' });
+    }
+  }, [show, state.currentFolder]);
 
   // Cleanup timeout on unmount or when popup is hidden
   useEffect(() => {
@@ -105,6 +109,7 @@ export const useFileReference = (text: string, setText: (text: string) => void, 
   useEffect(() => {
     if (!show) {
       clearLoadingTimeout();
+      dispatch({ type: 'SET_LOADING', payload: false });
     }
   }, [show]);
   

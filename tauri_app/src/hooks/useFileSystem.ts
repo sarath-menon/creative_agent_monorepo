@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { useCallback } from 'react';
 import { readDir, BaseDirectory } from '@tauri-apps/plugin-fs';
 import * as path from '@tauri-apps/api/path';
 import { filterAndSortEntries, type FileEntry } from '@/lib/fileUtils';
@@ -69,13 +70,13 @@ export const useFileSystem = (customBasePath?: string) => {
     refetchOnWindowFocus: false, // Don't refetch on window focus
   });
 
-  const fetchFiles = () => {
+  const fetchFiles = useCallback(() => {
     return refetch();
-  };
+  }, [refetch]);
 
-  const fetchDirectoryContentsWrapper = async (dirPath: string) => {
+  const fetchDirectoryContentsWrapper = useCallback(async (dirPath: string) => {
     return await fetchDirectoryContents(dirPath, customBasePath);
-  };
+  }, [customBasePath]);
 
   return {
     currentFiles: data?.files ?? [],

@@ -618,15 +618,9 @@ export function ChatApp() {
             }} 
             onKeyDown={handleKeyDown}
             value={text}
-            className={
-              text.startsWith('/') 
-                ? text.includes(' ') 
-                  ? 'text-green-400' // Completed slash command
-                  : 'text-blue-400'  // Typing slash command
-                : text.includes('@') 
-                  ? 'text-purple-400' // File reference
-                  : ''
-            } autoFocus/>
+            availableFiles={fileRef.files.map(file => file.name)}
+            availableCommands={slashCommands.map(cmd => cmd.name)}
+            autoFocus/>
           <AIInputToolbar>
             <AIInputTools>
               <AIInputButton onClick={handleOpenFileDialog}>
