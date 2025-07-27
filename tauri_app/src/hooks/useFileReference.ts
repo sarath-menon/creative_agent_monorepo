@@ -1,4 +1,4 @@
-import { useReducer, useEffect } from 'react';
+import { useReducer, useEffect, useRef } from 'react';
 import { useFileSystem, type FileEntry } from './useFileSystem';
 import { getMediaFiles, getParentPath } from '@/lib/fileUtils';
 
@@ -55,6 +55,27 @@ const reducer = (state: State, action: Action): State => {
 export const useFileReference = (text: string, setText: (text: string) => void) => {
   const [state, dispatch] = useReducer(reducer, initialState);
   const { currentFiles, fetchFiles, fetchDirectoryContents } = useFileSystem();
+  const loadingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  const startDebouncedLoading = () => {
+    // Clear any existing timeout
+    if (loadingTimeoutRef.current) {
+      clearTimeout(loadingTimeoutRef.current);
+    }
+    
+    // Set loading after 150ms delay
+    loadingTimeoutRef.current = setTimeout(() => {
+      dispatch({ type: 'SET_LOADING', payload: true });
+      loadingTimeoutRef.current = null;
+    }, 150);
+  };
+  
+  const clearLoadingTimeout = () => {
+    if (loadingTimeoutRef.current) {
+      clearTimeout(loadingTimeoutRef.current);
+      loadingTimeoutRef.current = null;
+    }
+  };
   
   const baseFiles = state.currentFolder ? state.folderContents : currentFiles;
   const files = getMediaFiles(baseFiles);
@@ -72,6 +93,19 @@ export const useFileReference = (text: string, setText: (text: string) => void) 
 
   useEffect(() => {
     if (show) dispatch({ type: 'RESET_STATE' });
+  }, [show]);
+
+  // Cleanup timeout on unmount or when popup is hidden
+  useEffect(() => {
+    return () => {
+      clearLoadingTimeout();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!show) {
+      clearLoadingTimeout();
+    }
   }, [show]);
   
   const handleNavigation = (direction: 'up' | 'down') => {
@@ -101,12 +135,14 @@ export const useFileReference = (text: string, setText: (text: string) => void) 
   };
 
   const enterFolder = async (folder: FileEntry) => {
-    dispatch({ type: 'SET_LOADING', payload: true });
+    startDebouncedLoading();
     try {
       const contents = await fetchDirectoryContents(folder.path);
+      clearLoadingTimeout(); // Clear timeout since operation completed
       dispatch({ type: 'ENTER_FOLDER', payload: { contents, folder: folder.path } });
     } catch (error) {
       console.error('Failed to load folder contents:', error);
+      clearLoadingTimeout(); // Clear timeout on error
       dispatch({ type: 'SET_LOADING', payload: false });
     }
   };
@@ -115,13 +151,15 @@ export const useFileReference = (text: string, setText: (text: string) => void) 
     if (!state.currentFolder) return;
     
     const parentPath = getParentPath(state.currentFolder);
-    dispatch({ type: 'SET_LOADING', payload: true });
+    startDebouncedLoading();
     
     try {
       if (parentPath) {
         const contents = await fetchDirectoryContents(parentPath);
+        clearLoadingTimeout(); // Clear timeout since operation completed
         dispatch({ type: 'ENTER_FOLDER', payload: { contents, folder: parentPath } });
       } else {
+        clearLoadingTimeout(); // Clear timeout for immediate operation
         dispatch({ type: 'SET_CURRENT_FOLDER', payload: null });
         dispatch({ type: 'SET_FOLDER_CONTENTS', payload: [] });
         dispatch({ type: 'RESET_SELECTION' });
@@ -129,19 +167,20 @@ export const useFileReference = (text: string, setText: (text: string) => void) 
       }
     } catch (error) {
       console.error('Failed to load parent folder contents:', error);
+      clearLoadingTimeout(); // Clear timeout on error
       dispatch({ type: 'SET_LOADING', payload: false });
     }
   };
   
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (!show || !files.length) return;
+    if (!show) return;
     
     const keyActions: Record<string, () => void> = {
-      ArrowDown: () => handleNavigation('down'),
-      ArrowUp: () => handleNavigation('up'),
+      ArrowDown: () => files.length > 0 && handleNavigation('down'),
+      ArrowUp: () => files.length > 0 && handleNavigation('up'),
       ArrowLeft: () => state.currentFolder && goBack(),
       ArrowRight: () => files[state.selected]?.isDirectory && enterFolder(files[state.selected]),
-      Enter: handleSelection,
+      Enter: () => files.length > 0 && handleSelection(),
       Backspace: handleEscape,
       Escape: handleEscape,
     };

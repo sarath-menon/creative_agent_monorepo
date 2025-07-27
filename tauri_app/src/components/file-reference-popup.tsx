@@ -44,13 +44,6 @@ const FileItem = ({ file, isSelected, onSelect }: FileItemProps) => {
   );
 };
 
-const EmptyState = ({ currentFolder }: { currentFolder?: string | null }) => (
-  <div className="absolute bottom-full left-0 right-0 mb-2 bg-popover border border-border rounded-xl shadow-lg z-50 overflow-hidden p-2">
-    <div className="text-xs text-muted-foreground px-3 py-2">
-      {currentFolder ? 'No files found in folder' : 'No folders or media files found'}
-    </div>
-  </div>
-);
 
 const KeyShortcut = ({ children, onClick, title }: { children: React.ReactNode; onClick?: () => void; title?: string }) => (
   <button
@@ -96,10 +89,6 @@ const Header = ({ currentFolder, filesCount, onGoBack, canNavigateForward, onEnt
 );
 
 export function FileReferencePopup({ files, selected, onSelect, currentFolder, isLoadingFolder, onGoBack, onEnterFolder, onClose }: Props) {
-  if (!files.length && !isLoadingFolder) {
-    return <EmptyState currentFolder={currentFolder} />;
-  }
-
   const selectedFile = files[selected];
   const canNavigateForward = selectedFile?.isDirectory;
 
@@ -120,20 +109,24 @@ export function FileReferencePopup({ files, selected, onSelect, currentFolder, i
         onClose={onClose}
       />
       
-      {isLoadingFolder && (
+      {isLoadingFolder ? (
         <div className="text-xs text-muted-foreground px-3 py-2">
           Loading folder contents...
         </div>
+      ) : !files.length ? (
+        <div className="text-xs text-muted-foreground px-3 py-2">
+          {currentFolder ? 'No files found in folder' : 'No folders or media files found'}
+        </div>
+      ) : (
+        files.map((file, index) => (
+          <FileItem
+            key={file.path}
+            file={file}
+            isSelected={index === selected}
+            onSelect={onSelect}
+          />
+        ))
       )}
-      
-      {files.map((file, index) => (
-        <FileItem
-          key={file.path}
-          file={file}
-          isSelected={index === selected}
-          onSelect={onSelect}
-        />
-      ))}
     </div>
   );
 }
