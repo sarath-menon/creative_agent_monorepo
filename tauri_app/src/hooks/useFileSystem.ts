@@ -1,13 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
 import { readDir, BaseDirectory } from '@tauri-apps/plugin-fs';
 import * as path from '@tauri-apps/api/path';
+import { filterAndSortEntries, type FileEntry } from '@/lib/fileUtils';
 
-export interface FileEntry {
-  name: string;
-  path: string;
-  isDirectory: boolean;
-  extension?: string;
-}
+export type { FileEntry };
 
 interface FileSystemData {
   files: FileEntry[];
@@ -24,46 +20,7 @@ const fetchFileSystemData = async (): Promise<FileSystemData> => {
       baseDir: BaseDirectory.Desktop,
     });
 
-    const fileEntries: FileEntry[] = entries
-      .map(entry => {
-        const extension = entry.isFile ? 
-          entry.name.split('.').pop()?.toLowerCase() : undefined;
-        
-        const transformedEntry = {
-          name: entry.name,
-          path: entry.name,
-          isDirectory: entry.isDirectory,
-          extension
-        };
-      
-        return transformedEntry;
-      })
-      .filter(entry => {
-        // Filter out hidden files and common system files
-        if (entry.name.startsWith('.')) {
-          return false;
-        }
-        
-        if (entry.isDirectory) {
-          return true;
-        }
-        
-        // Include common file types
-        const allowedExtensions = [
-          'txt', 'md', 'js', 'ts', 'tsx', 'jsx', 'py', 'json', 'html', 'css',
-          'go', 'rs', 'cpp', 'c', 'h', 'java', 'php', 'rb', 'sh', 'yml', 'yaml',
-          'xml', 'csv', 'log', 'conf', 'cfg', 'ini', 'toml'
-        ];
-        
-        const includeFile = !entry.extension || allowedExtensions.includes(entry.extension);
-        return includeFile;
-      })
-      .sort((a, b) => {
-        // Sort directories first, then files alphabetically
-        if (a.isDirectory && !b.isDirectory) return -1;
-        if (!a.isDirectory && b.isDirectory) return 1;
-        return a.name.localeCompare(b.name);
-      });
+    const fileEntries = filterAndSortEntries(entries);
     
     return {
       files: fileEntries,
@@ -71,6 +28,20 @@ const fetchFileSystemData = async (): Promise<FileSystemData> => {
     };
   } catch (error) {
     console.error('Failed to load directory:', error);
+    throw error;
+  }
+};
+
+const fetchDirectoryContents = async (dirPath: string): Promise<FileEntry[]> => {
+  try {
+    // Read directory contents from the specified path
+    const entries = await readDir(dirPath, { 
+      baseDir: BaseDirectory.Desktop,
+    });
+
+    return filterAndSortEntries(entries, dirPath);
+  } catch (error) {
+    console.error('Failed to load directory contents:', error);
     throw error;
   }
 };
@@ -88,12 +59,17 @@ export const useFileSystem = () => {
     return refetch();
   };
 
+  const fetchDirectoryContentsWrapper = async (dirPath: string) => {
+    return await fetchDirectoryContents(dirPath);
+  };
+
   return {
     currentFiles: data?.files ?? [],
     isLoading,
     error: error?.message ?? null,
     currentDirectory: data?.currentDirectory ?? '',
     refresh: refetch,
-    fetchFiles // New method to trigger on-demand fetch
+    fetchFiles, // New method to trigger on-demand fetch
+    fetchDirectoryContents: fetchDirectoryContentsWrapper // Expose directory contents function
   };
 };
