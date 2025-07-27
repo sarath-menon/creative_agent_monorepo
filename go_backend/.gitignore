@@ -52,3 +52,6 @@ opencode
 opencode.md
 
 tools/blender/__pycache__
+
+# Database files
+**/*.db

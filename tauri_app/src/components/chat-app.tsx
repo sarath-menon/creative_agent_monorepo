@@ -11,11 +11,6 @@ import {
   AIInputToolbar,
   AIInputTools,
 } from '@/components/ui/kibo-ui/ai/input';
-import {
-  AIConversation,
-  AIConversationContent,
-  AIConversationScrollButton,
-} from '@/components/ui/kibo-ui/ai/conversation';
 import { AIMessage, AIMessageContent } from '@/components/ui/kibo-ui/ai/message';
 import { AIResponse } from '@/components/ui/kibo-ui/ai/response';
 import {
@@ -83,6 +78,8 @@ export function ChatApp() {
   const [selectedFileIndex, setSelectedFileIndex] = useState(0);
   const [inputElement, setInputElement] = useState<HTMLTextAreaElement | null>(null);
   const interruptedMessageAddedRef = useRef(false);
+  const conversationRef = useRef<HTMLDivElement>(null);
+  const userMessageRefs = useRef<(HTMLDivElement | null)[]>([]);
 
   // Helper function to parse and render structured JSON responses
   const renderResponseContent = (content: string) => {
@@ -360,6 +357,22 @@ export function ChatApp() {
     }
   };
 
+  // Auto-scroll to last user message when messages change
+  useEffect(() => {
+    // Find the index of the last user message
+    const lastUserMessageIndex = messages.findLastIndex(m => m.from === 'user');
+    
+    if (lastUserMessageIndex !== -1 && userMessageRefs.current[lastUserMessageIndex]) {
+      // Use setTimeout to ensure DOM updates are complete
+      setTimeout(() => {
+        userMessageRefs.current[lastUserMessageIndex]?.scrollIntoView({ 
+          behavior: 'smooth',
+          block: 'start'
+        });
+      }, 0);
+    }
+  }, [messages, sseStream.processing]);
+
   // Handle completion of streaming
   useEffect(() => {
     if (sseStream.completed && sseStream.finalContent && !sseStream.processing) {
@@ -493,10 +506,14 @@ export function ChatApp() {
       </div>
       
       {/* Conversation Display */}
-      <AIConversation className="relative h-full">
-        <AIConversationContent>
+      <div ref={conversationRef} className="relative h-full flex-1 overflow-y-auto">
+        <div className="">
           {messages.map((message, index) => (
-            <AIMessage from={message.from} key={index}>
+            <AIMessage 
+              from={message.from} 
+              key={index}
+              ref={message.from === 'user' ? (el) => userMessageRefs.current[index] = el : undefined}
+            >
               <AIMessageContent >
                 {message.from === 'assistant' ? (
                   renderResponseContent(message.content)
@@ -593,9 +610,8 @@ export function ChatApp() {
               </AIMessageContent>
             </AIMessage>
           )}
-        </AIConversationContent>
-        <AIConversationScrollButton />
-      </AIConversation>
+        </div>
+      </div>
 
       {/* Open Apps Display */}
       {(filteredApps.length > 0 || appsLoading) && (
