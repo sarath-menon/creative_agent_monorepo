@@ -27,7 +27,9 @@ export const filterAndSortEntries = (entries: any[], basePath = '') => {
     .filter(entry => {
       if (entry.name.startsWith('.')) return false;
       if (entry.isDirectory) return true;
-      return !entry.extension || CODE_EXTENSIONS.includes(entry.extension);
+      return !entry.extension || 
+             CODE_EXTENSIONS.includes(entry.extension) || 
+             MEDIA_EXTENSIONS.includes(entry.extension);
     })
     .sort((a, b) => {
       if (a.isDirectory && !b.isDirectory) return -1;

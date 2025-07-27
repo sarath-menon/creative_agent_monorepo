@@ -23,9 +23,9 @@ import {
   AIToolStep,
   type AIToolStatus,
 } from '@/components/ui/kibo-ui/ai/tool';
-import { GlobeIcon, MicIcon, PlusIcon, Play, Square, Command, HelpCircle, ImageIcon } from 'lucide-react';
+import { GlobeIcon, MicIcon, PlusIcon, Play, Square, Command, HelpCircle, ImageIcon, FolderIcon } from 'lucide-react';
 import { IconEdit } from '@tabler/icons-react';
-import { type FormEventHandler, useState, useEffect, useRef, useCallback } from 'react';
+import { type FormEventHandler, useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 
 import { useSession, useCreateSession } from '@/hooks/useSession';
@@ -33,10 +33,11 @@ import { useSendMessage } from '@/hooks/useMessages';
 import { usePersistentSSE } from '@/hooks/usePersistentSSE';
 import { type FileEntry } from '@/hooks/useFileSystem';
 import { useFileReference } from '@/hooks/useFileReference';
-import { FileReferencePopup } from './file-reference-popup';
+import { CommandFileReference } from './command-file-reference';
 import { useOpenApps } from '@/hooks/useOpenApps';
 import { useMediaHandler, type MediaItem } from '@/hooks/useMediaHandler';
 import { useMessageHistory } from '@/hooks/useMessageHistory';
+import { useFolderSelection } from '@/hooks/useFolderSelection';
 import { LoadingDots } from './loading-dots';
 import { MediaPreview } from './media-preview';
 import { Badge } from '@/components/ui/badge';
@@ -136,7 +137,6 @@ export function ChatApp() {
   const createSession = useCreateSession();
   const sendMessage = useSendMessage();
   const sseStream = usePersistentSSE(session?.id || '');
-  const fileRef = useFileReference(text, setText);
   const { apps: openApps, isLoading: appsLoading, error: appsError } = useOpenApps();
   const { 
     attachedMedia, 
@@ -148,7 +148,13 @@ export function ChatApp() {
     removeMediaItem, 
     clearMedia 
   } = useMediaHandler();
+  const { selectedFolder, selectFolder } = useFolderSelection();
 
+  // Memoize the folder path to prevent unnecessary re-renders
+  const memoizedFolderPath = useMemo(() => selectedFolder || undefined, [selectedFolder]);
+  
+  const fileRef = useFileReference(text, setText, memoizedFolderPath, inputElement);
+  
   // Initialize message history hook
   const messageHistory = useMessageHistory({
     sessionId: session?.id || '',
@@ -281,10 +287,11 @@ export function ChatApp() {
       }
     }
 
-    // File reference handles its own keys - simple!
-    if (fileRef.show) {
-      fileRef.handleKeyDown(e);
-      return; // Prevent other key handling when file ref is active
+    // Handle Escape key to close file reference popup
+    if (fileRef.show && e.key === 'Escape') {
+      e.preventDefault();
+      fileRef.close();
+      return;
     }
 
     // Handle history navigation when not in other modes
@@ -625,8 +632,9 @@ export function ChatApp() {
               <AIInputButton onClick={handleOpenFileDialog}>
                 <PlusIcon className='size-6' />
               </AIInputButton>
-
-
+              <AIInputButton onClick={selectFolder} title={selectedFolder ? `Current folder: ${selectedFolder}` : 'Select parent folder'}>
+                <FolderIcon className={`size-6 ${selectedFolder ? 'text-blue-400' : ''}`} />
+              </AIInputButton>
             </AIInputTools>
             <AIInputSubmit 
               disabled={isSubmitDisabled}
@@ -663,11 +671,10 @@ export function ChatApp() {
           </div>
         )}
 
-        {/* File Reference Dropdown - Ultra simple! */}
+        {/* File Reference Dropdown with Command Component */}
         {fileRef.show && (
-          <FileReferencePopup
+          <CommandFileReference
             files={fileRef.files}
-            selected={fileRef.selected}
             onSelect={fileRef.selectFile}
             currentFolder={fileRef.currentFolder}
             isLoadingFolder={fileRef.isLoadingFolder}

@@ -52,9 +52,9 @@ const reducer = (state: State, action: Action): State => {
   }
 };
 
-export const useFileReference = (text: string, setText: (text: string) => void) => {
+export const useFileReference = (text: string, setText: (text: string) => void, customBasePath?: string, inputElement?: HTMLTextAreaElement | null) => {
   const [state, dispatch] = useReducer(reducer, initialState);
-  const { currentFiles, fetchFiles, fetchDirectoryContents } = useFileSystem();
+  const { currentFiles, fetchFiles, fetchDirectoryContents } = useFileSystem(customBasePath);
   const loadingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   const startDebouncedLoading = () => {
@@ -108,15 +108,9 @@ export const useFileReference = (text: string, setText: (text: string) => void) 
     }
   }, [show]);
   
-  const handleNavigation = (direction: 'up' | 'down') => {
-    const newIndex = direction === 'down' 
-      ? (state.selected < files.length - 1 ? state.selected + 1 : 0)
-      : (state.selected > 0 ? state.selected - 1 : files.length - 1);
-    dispatch({ type: 'SET_SELECTED', payload: newIndex });
-  };
 
-  const handleSelection = () => {
-    const file = files[state.selected];
+  const handleSelection = (selectedFile?: FileEntry) => {
+    const file = selectedFile || files[state.selected];
     if (!file) return;
     
     const words = text.split(' ');
@@ -124,14 +118,30 @@ export const useFileReference = (text: string, setText: (text: string) => void) 
     const hasSubdirectory = file.path.includes('/');
     const prefix = hasSubdirectory ? '../' : '';
     words[words.length - 1] = `@${prefix}${file.name} `;
-    setText(words.join(' '));
+    const newText = words.join(' ');
+    setText(newText);
+    
+    // Focus input and set cursor to end
+    if (inputElement) {
+      inputElement.focus();
+      const textLength = newText.length;
+      inputElement.setSelectionRange(textLength, textLength);
+    }
   };
 
   const handleEscape = () => {
     dispatch({ type: 'RESET_STATE' });
     const words = text.split(' ');
     words[words.length - 1] = '';
-    setText(words.join(' ').trim());
+    const newText = words.join(' ').trim();
+    setText(newText);
+    
+    // Focus input and set cursor to end
+    if (inputElement) {
+      inputElement.focus();
+      const textLength = newText.length;
+      inputElement.setSelectionRange(textLength, textLength);
+    }
   };
 
   const enterFolder = async (folder: FileEntry) => {
@@ -172,29 +182,15 @@ export const useFileReference = (text: string, setText: (text: string) => void) 
     }
   };
   
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (!show) return;
-    
-    const keyActions: Record<string, () => void> = {
-      ArrowDown: () => files.length > 0 && handleNavigation('down'),
-      ArrowUp: () => files.length > 0 && handleNavigation('up'),
-      ArrowLeft: () => state.currentFolder && goBack(),
-      ArrowRight: () => files[state.selected]?.isDirectory && enterFolder(files[state.selected]),
-      Enter: () => files.length > 0 && handleSelection(),
-      Backspace: handleEscape,
-      Escape: handleEscape,
-    };
-
-    const action = keyActions[e.key];
-    if (action) {
-      e.preventDefault();
-      action();
-    }
-  };
   
-  const enterSelectedFolder = () => {
-    const selectedFile = files[state.selected];
+  const enterSelectedFolder = (file?: FileEntry) => {
+    const selectedFile = file || files[state.selected];
     if (selectedFile?.isDirectory) {
+      // Update selected state before entering
+      const fileIndex = files.indexOf(selectedFile);
+      if (fileIndex !== -1) {
+        dispatch({ type: 'SET_SELECTED', payload: fileIndex });
+      }
       enterFolder(selectedFile);
     }
   };
@@ -203,7 +199,6 @@ export const useFileReference = (text: string, setText: (text: string) => void) 
     show, 
     files, 
     selected: state.selected, 
-    handleKeyDown, 
     selectFile: handleSelection, 
     currentFolder: state.currentFolder,
     isLoadingFolder: state.isLoadingFolder,
