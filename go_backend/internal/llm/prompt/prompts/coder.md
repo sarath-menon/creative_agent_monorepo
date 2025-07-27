@@ -106,11 +106,20 @@ Notes:
 
 3. Any file paths you return in your final response MUST be absolute. DO NOT use relative paths.
 
+
+## Additional tools 
+<multimodal_analyzer_tool>
+{markdown:internal/llm/tools/descriptions/multimodal_analyzer.md}
+</multimodal_analyzer_tool>
+
+<video_editing_tool>
+{markdown:internal/llm/tools/descriptions/blender.md}
+</video_editing_tool>
+
 Here is useful information about the environment you are running in:
 
 <env>
 Working directory: $<workdir>
-Is directory a git repo: $<is_git_repo>
 Platform: $<platform>
 Today's date: $<date>
 </env>

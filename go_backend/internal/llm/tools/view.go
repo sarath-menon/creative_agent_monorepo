@@ -114,7 +114,6 @@ func (v *viewTool) Run(ctx context.Context, call ToolCall) (ToolResponse, error)
 		return NewTextErrorResponse(fmt.Sprintf("Path is a directory, not a file: %s", filePath)), nil
 	}
 
-
 	// Set default limit if not provided
 	if params.Limit <= 0 {
 		params.Limit = DefaultReadLimit
@@ -128,11 +127,11 @@ func (v *viewTool) Run(ctx context.Context, call ToolCall) (ToolResponse, error)
 		if err != nil {
 			return ToolResponse{}, fmt.Errorf("error getting image file info: %w", err)
 		}
-		
+
 		// Return text description instead of base64 data to avoid context overflow
-		imageDescription := fmt.Sprintf("Image file (%s) at %s\nFile size: %d bytes\nTo analyze this image, you would need to process it with an image analysis tool.", 
+		imageDescription := fmt.Sprintf("Image file (%s) at %s\nFile size: %d bytes\nTo analyze this image, you would need to process it with an image analysis tool.",
 			imageType, filePath, fileInfo.Size())
-		
+
 		recordFileRead(filePath)
 		return WithResponseMetadata(
 			NewTextResponse(imageDescription),

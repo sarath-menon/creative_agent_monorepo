@@ -6,6 +6,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 
@@ -38,6 +39,9 @@ func LoadPromptWithVars(name string, vars map[string]string) string {
 			result = strings.ReplaceAll(result, placeholder, value)
 		}
 	}
+
+	// Resolve markdown file templates
+	result = resolveMarkdownTemplates(result)
 
 	return strings.TrimSpace(result)
 }
@@ -81,4 +85,34 @@ func boolToYesNo(b bool) string {
 		return "Yes"
 	}
 	return "No"
+}
+
+// resolveMarkdownTemplates resolves {markdown:path} templates in content
+func resolveMarkdownTemplates(content string) string {
+	markdownRegex := regexp.MustCompile(`\{markdown:([^}]+)\}`)
+	workspaceRoot := config.WorkingDirectory()
+
+	return markdownRegex.ReplaceAllStringFunc(content, func(match string) string {
+		// Extract the file path from the match
+		submatches := markdownRegex.FindStringSubmatch(match)
+		if len(submatches) < 2 {
+			panic("Invalid markdown template: " + match)
+		}
+
+		relativePath := strings.TrimSpace(submatches[1])
+		if relativePath == "" {
+			panic("Empty path in markdown template: " + match)
+		}
+
+		// Construct absolute path relative to workspace
+		fullPath := filepath.Join(workspaceRoot, relativePath)
+
+		// Read the file content
+		fileContent, err := os.ReadFile(fullPath)
+		if err != nil {
+			panic("Failed to load markdown file: " + relativePath + " - " + err.Error())
+		}
+
+		return string(fileContent)
+	})
 }

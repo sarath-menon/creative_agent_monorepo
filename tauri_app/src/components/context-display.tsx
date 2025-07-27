@@ -75,7 +75,7 @@ export function ContextDisplay({ data }: ContextDisplayProps) {
             className="h-3"
           />
           <div 
-            className={`absolute top-0 left-0 h-3 rounded-full transition-all ${getProgressColor()}`}
+            className={`absolute top-0 left-0 h-3 rounded-l-full transition-all ${getProgressColor()}`}
             style={{ width: `${Math.min(data.usagePercent, 100)}%` }}
           />
         </div>

@@ -1,50 +1,16 @@
-# Blender Video Editing Tool
-
-Generic Blender tool that dynamically calls any function from the tools.blender Python module within Blender's execution environment.
-
-## How to Use This Tool
-
-Provide a function name and parameters in this JSON format:
-
-```json
-{
-  "function": "function_name",
-  "parameters": {
-    "param1": "value1",
-    "param2": "value2"
-  }
-}
-```
-
-Example calls:
-```json
-{
-  "function": "add_video_sequence",
-  "parameters": {
-    "filepath": "/path/to/video.mp4",
-    "channel": 1,
-    "frame_start": 10,
-    "fit_method": "FIT"
-  }
-}
-```
-
-```json
-{
-  "function": "export_video", 
-  "parameters": {
-    "output_path": "/path/to/output.mp4",
-    "resolution": [1920, 1080],
-    "fps": 24
-  }
-}
-```
-
-## Important Rules
+# Video editing tools
+These are python tools for video editing automation using the blender MCP 
 
 - You MUST run the final python script within blender's execution environment as a SINGLE code block. Don't create separate files or split into multiple execution calls - each `execute_blender_code` call is stateless and variables/imports don't persist between calls.
-- You MUST use absolute file paths when working, since Blender's working directory may not match your project directory.
-- ALL functions are exposed through `tools.blender` - NEVER import from submodules.
+-  You MUST use absolute file paths when working, since Blender's working directory may not match your project directory.
+- **ALL functions are exposed through `blender` - NEVER import from submodules:**
+    **Positive example**
+
+    ```python
+    from blender import (
+        get_current_workspace, get_available_workspaces,
+    )
+    ```
 
 ## ⚠️ Sequencer Rules
 
@@ -59,6 +25,19 @@ Example calls:
 - **Overlapping frames allowed** - higher channels composite on top
 - Only use when you want simultaneous playback (overlays, titles, etc.)
 - Example: Background ch1 (1-300), Overlay ch2 (50-150), Text ch3 (100-200) ✓
+
+**Common Patterns:**
+```python
+# Sequential: clips play one after another
+add_video_sequence('clip1.mp4', 1, 1)      # frames 1-120
+add_video_sequence('clip2.mp4', 1, 121)    # frames 121-240  
+add_video_sequence('clip3.mp4', 1, 241)    # frames 241-360
+
+# Layered: clips play simultaneously 
+add_video_sequence('background.mp4', 1, 1)  # base layer
+add_video_sequence('overlay.mp4', 2, 50)    # on top, starts at frame 50
+add_text_sequence('Title', 3, 100, 60)      # text overlay
+```
 
 ## Quick Start Workflow
 
@@ -87,11 +66,11 @@ export_video('/path/to/output.mp4', resolution=(1920, 1080), fps=24)
 
 # Capture preview screenshot at current frame
 capture_preview_frame('/path/to/preview.png', resolution=(1920, 1080))
+
+# Capture specific frame as JPEG
+capture_preview_frame('/path/to/frame_100.jpg', frame=100, format='JPEG', quality=85)
 ```
 
-# Available Functions
-
-## Workspace Operations
 
 ### get_current_workspace()
 Returns the name of the currently active Blender workspace
@@ -104,8 +83,6 @@ Returns a list of all available Blender workspaces
 
 **Returns:**
 - `List[str]` - List of all workspace names
-
-## Timeline Management
 
 ### get_sequences(channel=None)
 Returns timeline sequences, optionally filtered by channel
@@ -262,7 +239,7 @@ Get the current playhead position on the timeline
 **Returns:**
 - `int` - Current frame number
 
-## Export Operations
+## Timeline operations
 
 ### export_video(output_path, frame_start=None, frame_end=None, resolution=(1920, 1080), fps=24, video_format='MPEG4', codec='H264', quality='HIGH')
 Export timeline sequences to a video file
