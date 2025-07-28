@@ -127,8 +127,8 @@ export const useFileReference = (text: string, setText: (text: string) => void, 
     words[words.length - 1] = `${displayReference} `;
     const newText = words.join(' ');
     
-    // Store the mapping from display reference to full path
-    referenceMappingsRef.current.set(displayReference, `@${file.path}`);
+    // Store simple mapping: filename → full path (decoupled from display format)
+    referenceMappingsRef.current.set(file.name, file.path);
     
     setText(newText);
     
@@ -209,17 +209,16 @@ export const useFileReference = (text: string, setText: (text: string) => void, 
   const expandFileReferences = (inputText: string): string => {
     let expandedText = inputText;
     
-    // Find all @references in the text
-    const referenceRegex = /@[^\s]+/g;
-    const matches = inputText.match(referenceRegex);
+    // For each filename in our dictionary, replace both @filename and @../filename patterns
+    for (const [filename, fullPath] of referenceMappingsRef.current) {
+      expandedText = expandedText.replace(`@${filename}`, fullPath);
+      expandedText = expandedText.replace(`@../${filename}`, fullPath);
+    }
     
-    if (matches) {
-      for (const match of matches) {
-        const fullPath = referenceMappingsRef.current.get(match);
-        if (fullPath) {
-          expandedText = expandedText.replace(match, fullPath);
-        }
-      }
+    // Check for any remaining unresolved @references
+    const unresolvedMatches = expandedText.match(/@[^\s]+/g);
+    if (unresolvedMatches) {
+      throw new Error(`Unresolved file references: ${unresolvedMatches.join(', ')}`);
     }
     
     return expandedText;

@@ -537,11 +537,8 @@ export function ChatApp() {
       {/* Open Apps Display */}
       {(filteredApps.length > 0 || appsLoading) && (
         <div className="max-w-4xl mx-auto w-full mb-2">
-          <div className="text-xs text-muted-foreground px-1">
-            {appsLoading && filteredApps.length === 0 ? '(loading...)' : appsLoading ? '(updating...)' : ''}
-          </div>
           {appsLoading && filteredApps.length === 0 ? (
-            <div className="flex items-center gap-2 px-2 py-3 text-muted-foreground">
+            <div className="flex items-center gap-2 px-2 py-2 text-muted-foreground">
               <LoadingDots />
               <span className="text-xs">Loading applications...</span>
             </div>
