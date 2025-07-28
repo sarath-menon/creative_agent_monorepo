@@ -1,7 +1,7 @@
-import { Play, ImageIcon } from 'lucide-react';
+import { Play, ImageIcon, FolderIcon } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { AudioWaveform } from './audio-waveform';
-import { type MediaItem } from '@/hooks/useMediaHandler';
+import { type MediaItem } from '@/stores/mediaStore';
 
 interface MessageMediaDisplayProps {
   media: MediaItem[];
@@ -62,6 +62,18 @@ export function MessageMediaDisplay({ media }: MessageMediaDisplayProps) {
               <TooltipTrigger asChild>
                 <div className="bg-stone-700/50 rounded-lg p-4 max-w-xs">
                   <AudioWaveform className="h-12 w-16" />
+                </div>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{mediaItem.name}</p>
+              </TooltipContent>
+            </Tooltip>
+          ) : mediaItem.type === 'folder' ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="flex items-center gap-2 bg-stone-700/50 rounded-lg p-3">
+                  <FolderIcon className="w-6 h-6 text-stone-400" />
+                  <span className="text-sm text-stone-300">{mediaItem.name}</span>
                 </div>
               </TooltipTrigger>
               <TooltipContent>

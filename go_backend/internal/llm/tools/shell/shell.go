@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"go_general_agent/internal/config"
+	"mvdan.cc/sh/v3/syntax"
 )
 
 type PersistentShell struct {
@@ -302,7 +303,7 @@ func (s *PersistentShell) Close() {
 }
 
 func shellQuote(s string) string {
-	return "'" + strings.ReplaceAll(s, "'", "'\\''") + "'"
+	return syntax.Quote(s, syntax.LangBash)
 }
 
 func readFileOrEmpty(path string) string {

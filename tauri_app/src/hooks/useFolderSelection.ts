@@ -14,7 +14,7 @@ export const useFolderSelection = () => {
     }
   }, []);
 
-  const selectFolder = useCallback(async () => {
+  const selectFolder = useCallback(async (): Promise<string | null> => {
     try {
       const selected = await open({
         directory: true,
@@ -24,9 +24,12 @@ export const useFolderSelection = () => {
       if (selected && typeof selected === 'string') {
         setSelectedFolder(selected);
         localStorage.setItem(FOLDER_STORAGE_KEY, selected);
+        return selected;
       }
+      return null;
     } catch (error) {
       console.error('Failed to select folder:', error);
+      return null;
     }
   }, []);
 

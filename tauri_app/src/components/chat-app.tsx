@@ -23,7 +23,7 @@ import {
   AIToolStep,
   type AIToolStatus,
 } from '@/components/ui/kibo-ui/ai/tool';
-import { PlusIcon, FolderIcon } from 'lucide-react';
+import { FolderIcon } from 'lucide-react';
 import { type FormEventHandler, useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { TooltipProvider } from '@/components/ui/tooltip';
 
@@ -33,7 +33,7 @@ import { usePersistentSSE } from '@/hooks/usePersistentSSE';
 import { type FileEntry } from '@/hooks/useFileSystem';
 import { useFileReference } from '@/hooks/useFileReference';
 import { CommandFileReference } from './command-file-reference';
-import { useMediaHandler, type MediaItem } from '@/hooks/useMediaHandler';
+import { useMediaStore, type MediaItem, expandFileReferences, removeFileReferences } from '@/stores/mediaStore';
 import { useFolderSelection } from '@/hooks/useFolderSelection';
 import { useMessageHistoryNavigation } from '@/hooks/useMessageHistoryNavigation';
 import { useMessageScrolling } from '@/hooks/useMessageScrolling';
@@ -77,22 +77,35 @@ export function ChatApp() {
   const createSession = useCreateSession();
   const sendMessage = useSendMessage();
   const sseStream = usePersistentSSE(session?.id || '');
-  const { 
-    attachedMedia, 
-    isDragOver, 
-    handleOpenFileDialog, 
-    handleDragOver, 
-    handleDragLeave, 
-    handleDrop, 
-    removeMediaItem, 
-    clearMedia 
-  } = useMediaHandler();
+  const files = useMediaStore(state => state.files);
+  const referenceMap = useMediaStore(state => state.referenceMap);
+  const addFile = useMediaStore(state => state.addFile);
+  const addFolder = useMediaStore(state => state.addFolder);
+  const removeFile = useMediaStore(state => state.removeFile);
+  const clearFiles = useMediaStore(state => state.clearFiles);
+  const syncWithText = useMediaStore(state => state.syncWithText);
+  const removeReference = useMediaStore(state => state.removeReference);
   const { selectedFolder, selectFolder } = useFolderSelection();
+
+  const handleFolderSelect = async () => {
+    try {
+      const selectedFolderPath = await selectFolder();
+      if (selectedFolderPath) {
+        addFolder(selectedFolderPath);
+      }
+    } catch (error) {
+      console.error('Failed to select and attach folder:', error);
+    }
+  };
 
   // Memoize the folder path to prevent unnecessary re-renders
   const memoizedFolderPath = useMemo(() => selectedFolder || undefined, [selectedFolder]);
   
   const fileRef = useFileReference(text, setText, memoizedFolderPath, inputElement);
+  
+  const handleFileSelect = (file: FileEntry) => {
+    fileRef.selectFile(file);
+  };
   
   // Initialize new hooks
   const historyNavigation = useMessageHistoryNavigation({
@@ -103,11 +116,12 @@ export function ChatApp() {
   });
 
   const { conversationRef, setUserMessageRef } = useMessageScrolling(messages, sseStream.processing);
-  
-
 
   const handleTextChange = (value: string) => {
     setText(value);
+    
+    // Sync media store with text changes (bidirectional sync)
+    syncWithText(value);
     
     // Handle slash commands using utility function
     const shouldShow = shouldShowSlashCommands(value);
@@ -115,8 +129,6 @@ export function ChatApp() {
     if (shouldShow) {
       setSelectedCommandIndex(0);
     }
-    
-    // File reference auto-managed by hook - no coordination needed!
   };
 
   const handleSlashCommandSelect = async (command: typeof slashCommands[0]) => {
@@ -212,10 +224,10 @@ export function ChatApp() {
     setMessages(prev => [...prev, { 
       content: messageText, 
       from: 'user',
-      media: attachedMedia.length > 0 ? attachedMedia : undefined
+      media: files.length > 0 ? files : undefined
     }]);
     setText('');
-    clearMedia();
+    clearFiles();
     
     // Reset interrupted message guard for new message
     interruptedMessageAddedRef.current = false;
@@ -223,11 +235,11 @@ export function ChatApp() {
     // Send message via persistent SSE
     try {
       // Expand file references from display format to full paths
-      const expandedText = fileRef.expandFileReferences(messageText);
+      const expandedText = expandFileReferences(messageText, referenceMap);
       
       const messageData = {
         text: expandedText,
-        media: attachedMedia.length > 0 ? attachedMedia.map(m => m.path) : undefined
+        media: files.length > 0 ? files.map(f => f.path) : undefined
       };
       await sseStream.sendMessage(JSON.stringify(messageData));
     } catch (error) {
@@ -250,7 +262,7 @@ export function ChatApp() {
   const handleNewSession = () => {
     setMessages([]);
     setText('');
-    clearMedia();
+    clearFiles();
     interruptedMessageAddedRef.current = false;
   };
 
@@ -260,7 +272,7 @@ export function ChatApp() {
   
   // Ready state: need text/media and connection. Other states: only need connection for pause/resume
   const isSubmitDisabled = buttonStatus === 'ready' 
-    ? ((!text && attachedMedia.length === 0) || !session?.id || sessionLoading || !sseStream.connected)
+    ? ((!text && files.length === 0) || !session?.id || sessionLoading || !sseStream.connected)
     : (!session?.id || sessionLoading || !sseStream.connected);
 
   return (
@@ -361,17 +373,27 @@ export function ChatApp() {
 
       {/* Media Preview Section */}
       <div className="max-w-4xl mx-auto w-full mb-0">
-        <MediaPreview attachedMedia={attachedMedia} onRemoveItem={removeMediaItem} />
+        <MediaPreview attachedMedia={files} onRemoveItem={(index) => {
+          const fileToRemove = files[index];
+          if (fileToRemove) {
+            const updatedText = removeFileReferences(text, referenceMap, fileToRemove.path);
+            setText(updatedText);
+            
+            // Remove the reference from the map
+            for (const [displayName, fullPath] of referenceMap) {
+              if (fullPath === fileToRemove.path) {
+                removeReference(displayName);
+                break;
+              }
+            }
+          }
+          removeFile(index);
+        }} />
       </div>
 
       {/* AI Input Section */}
       <div className="max-w-4xl mx-auto w-full relative">
-        <div
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-          className={`relative ${isDragOver ? 'ring-2 ring-blue-500 ring-opacity-50' : ''}`}
-        >
+        <div className="relative">
           <AIInput onSubmit={handleSubmit} className='bg-stone-600/20 border-neutral-600 border-[0.5px]'>
             <AIInputTextarea
             onChange={(e) => {
@@ -387,10 +409,7 @@ export function ChatApp() {
             autoFocus/>
           <AIInputToolbar>
             <AIInputTools>
-              <AIInputButton onClick={handleOpenFileDialog}>
-                <PlusIcon className='size-6' />
-              </AIInputButton>
-              <AIInputButton onClick={selectFolder} title={selectedFolder ? `Current folder: ${selectedFolder}` : 'Select parent folder'}>
+              <AIInputButton onClick={handleFolderSelect} title={selectedFolder ? `Current folder: ${selectedFolder}` : 'Select parent folder'}>
                 <FolderIcon className={`size-6 ${selectedFolder ? 'text-blue-400' : ''}`} />
               </AIInputButton>
               <AppDisplayPopover 
@@ -418,7 +437,7 @@ export function ChatApp() {
         {fileRef.show && (
           <CommandFileReference
             files={fileRef.files}
-            onSelect={fileRef.selectFile}
+            onSelect={handleFileSelect}
             currentFolder={fileRef.currentFolder}
             isLoadingFolder={fileRef.isLoadingFolder}
             onGoBack={fileRef.goBack}

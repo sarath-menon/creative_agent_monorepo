@@ -13,6 +13,7 @@ import (
 
 	"go_general_agent/internal/api"
 	"go_general_agent/internal/commands"
+	"go_general_agent/internal/fileutil"
 	"go_general_agent/internal/llm/agent"
 )
 
@@ -156,15 +157,42 @@ func HandleSSEStream(ctx context.Context, handler *api.QueryHandler, w http.Resp
 	}
 }
 
+// MessageContent represents the JSON structure sent from frontend
+type MessageContent struct {
+	Text  string   `json:"text"`
+	Media []string `json:"media,omitempty"`
+}
+
 // extractText parses JSON content to extract the actual text value
 func extractText(content string) string {
-	var textContent struct {
-		Text string `json:"text"`
-	}
-	if err := json.Unmarshal([]byte(content), &textContent); err == nil && textContent.Text != "" {
-		return textContent.Text
+	var msgContent MessageContent
+	if err := json.Unmarshal([]byte(content), &msgContent); err == nil && msgContent.Text != "" {
+		return msgContent.Text
 	}
 	return content
+}
+
+// parseMessageContent parses the complete JSON message structure
+func parseMessageContent(content string) (MessageContent, error) {
+	var msgContent MessageContent
+	if err := json.Unmarshal([]byte(content), &msgContent); err != nil {
+		return msgContent, fmt.Errorf("failed to parse message content as JSON: %w", err)
+	}
+	return msgContent, nil
+}
+
+// quotePaths ensures all file paths in the content are properly quoted for shell operations
+func quotePaths(text string, mediaPaths []string) string {
+	result := text
+	
+	// Quote media paths that might be referenced in the text
+	for _, path := range mediaPaths {
+		quotedPath := fileutil.QuotePath(path)
+		// Replace unquoted paths with quoted versions
+		result = strings.ReplaceAll(result, path, quotedPath)
+	}
+	
+	return result
 }
 
 // handleShellCommand executes shell commands for ! prefixed messages
@@ -231,13 +259,22 @@ func handleRegularMessage(ctx context.Context, handler *api.QueryHandler, w http
 
 // processMessage processes a single message and streams the response
 func processMessage(ctx context.Context, handler *api.QueryHandler, w http.ResponseWriter, flusher http.Flusher, sessionID, content string) error {
-	text := extractText(content)
+	msgContent, err := parseMessageContent(content)
+	if err != nil {
+		return err
+	}
+	
+	text := msgContent.Text
 
 	switch {
 	case strings.HasPrefix(text, "/"):
-		return handleSlashCommandStreaming(ctx, handler, w, flusher, sessionID, text)
+		// Quote paths in slash commands if they contain file references
+		quotedText := quotePaths(text, msgContent.Media)
+		return handleSlashCommandStreaming(ctx, handler, w, flusher, sessionID, quotedText)
 	case strings.HasPrefix(text, "!"):
-		return handleShellCommand(ctx, w, flusher, text)
+		// Quote paths in shell commands 
+		quotedText := quotePaths(text, msgContent.Media)
+		return handleShellCommand(ctx, w, flusher, quotedText)
 	default:
 		return handleRegularMessage(ctx, handler, w, flusher, sessionID, content)
 	}

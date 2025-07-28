@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
-import { FolderIcon, ImageIcon, ArrowLeftIcon, ArrowRightIcon } from 'lucide-react';
+import { FolderIcon, ImageIcon, VideoIcon, AudioLines, Play } from 'lucide-react';
 import { type FileEntry } from '@/hooks/useFileSystem';
-import { isImageFile } from '@/lib/fileUtils';
+import { convertFileSrc } from '@tauri-apps/api/core';
 import {
   Command,
   CommandEmpty,
@@ -19,6 +19,86 @@ interface Props {
   onEnterFolder?: () => void;
   onClose?: () => void;
 }
+
+// Simple media type detection
+const getFileType = (fileName: string): 'image' | 'video' | 'audio' | null => {
+  const extension = fileName.split('.').pop()?.toLowerCase() || '';
+  
+  if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'].includes(extension)) {
+    return 'image';
+  }
+  if (['mp4', 'mov', 'avi', 'mkv', 'webm', 'wmv'].includes(extension)) {
+    return 'video';
+  }
+  if (['mp3', 'wav', 'ogg', 'm4a', 'aac', 'flac', 'wma'].includes(extension)) {
+    return 'audio';
+  }
+  
+  return null;
+};
+
+// Media thumbnail component
+const MediaThumbnail = ({ file }: { file: FileEntry }) => {
+  const fileType = getFileType(file.name);
+  
+  if (!fileType) {
+    return <ImageIcon className="size-4 text-green-500" />;
+  }
+  
+  const previewUrl = convertFileSrc(file.path);
+  
+  if (fileType === 'image') {
+    return (
+      <div className="relative flex-shrink-0">
+        <img 
+          src={previewUrl}
+          alt={file.name}
+          className="size-8 object-cover rounded-sm"
+          onError={(e) => {
+            e.currentTarget.style.display = 'none';
+            const fallback = e.currentTarget.nextElementSibling as HTMLElement;
+            if (fallback) fallback.style.display = 'block';
+          }}
+        />
+        <ImageIcon 
+          className="size-4 text-green-500 absolute top-0 left-0" 
+          style={{ display: 'none' }}
+        />
+      </div>
+    );
+  }
+  
+  if (fileType === 'video') {
+    return (
+      <div className="relative size-4 flex-shrink-0">
+        <video 
+          src={previewUrl}
+          className="size-4 object-cover rounded-sm"
+          preload="metadata"
+          onLoadedMetadata={(e) => {
+            e.currentTarget.currentTime = 1;
+          }}
+          onError={(e) => {
+            e.currentTarget.style.display = 'none';
+            const fallback = e.currentTarget.nextElementSibling as HTMLElement;
+            if (fallback) fallback.style.display = 'block';
+          }}
+        />
+        <Play className="absolute -bottom-0.5 -right-0.5 w-2 h-2 text-white bg-black/50 rounded-full p-0.5" />
+        <VideoIcon 
+          className="size-4 text-green-500 absolute top-0 left-0" 
+          style={{ display: 'none' }}
+        />
+      </div>
+    );
+  }
+  
+  if (fileType === 'audio') {
+    return <AudioLines className="size-4 text-green-500" />;
+  }
+  
+  return <ImageIcon className="size-4 text-green-500" />;
+};
 
 export function CommandFileReference({ 
   files, 
@@ -128,7 +208,9 @@ export function CommandFileReference({
           ) : (
             <CommandGroup>
               {files.map((file) => {
-                const isImage = !file.isDirectory && file.extension && isImageFile(file.name);
+                const fileType = getFileType(file.name);
+                const typeLabel = fileType ? fileType.charAt(0).toUpperCase() + fileType.slice(1) : 'File';
+                
                 return (
                   <CommandItem
                     key={file.path}
@@ -138,13 +220,13 @@ export function CommandFileReference({
                     {file.isDirectory ? (
                       <FolderIcon className="size-4 text-blue-500" />
                     ) : (
-                      <ImageIcon className="size-4 text-green-500" />
+                      <MediaThumbnail file={file} />
                     )}
                     <div className="flex-1">
                       <div className="font-medium text-sm">{file.name}</div>
                       {file.extension && (
                         <div className="text-xs text-muted-foreground">
-                          {file.isDirectory ? 'Folder' : (isImage ? 'Image' : 'Video')} • .{file.extension}
+                          {file.isDirectory ? 'Folder' : typeLabel} • .{file.extension}
                         </div>
                       )}
                     </div>

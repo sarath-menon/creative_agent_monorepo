@@ -13,6 +13,7 @@ import (
 	"go_general_agent/internal/logging"
 
 	"github.com/bmatcuk/doublestar/v4"
+	"mvdan.cc/sh/v3/syntax"
 )
 
 var (
@@ -161,4 +162,9 @@ func GlobWithDoublestar(pattern, searchPath string, limit int) ([]string, bool, 
 		results[i] = m.Path
 	}
 	return results, truncated, nil
+}
+
+// QuotePath properly quotes a file path for safe use in shell commands
+func QuotePath(path string) string {
+	return syntax.Quote(path, syntax.LangBash)
 }

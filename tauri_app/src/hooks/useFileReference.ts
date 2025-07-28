@@ -1,10 +1,10 @@
 import { useReducer, useEffect, useRef } from 'react';
-import { useFileSystem, type FileEntry } from './useFileSystem';
-import { getMediaFiles, getParentPath } from '@/lib/fileUtils';
+import { useFileSystem, type MediaItem } from './useFileSystem';
+import { useMediaStore, getMediaFiles, getParentPath } from '@/stores/mediaStore';
 
 type State = {
   selected: number;
-  folderContents: FileEntry[];
+  folderContents: MediaItem[];
   currentFolder: string | null;
   isLoadingFolder: boolean;
 };
@@ -12,11 +12,11 @@ type State = {
 type Action = 
   | { type: 'SET_SELECTED'; payload: number }
   | { type: 'RESET_SELECTION' }
-  | { type: 'SET_FOLDER_CONTENTS'; payload: FileEntry[] }
+  | { type: 'SET_FOLDER_CONTENTS'; payload: MediaItem[] }
   | { type: 'SET_CURRENT_FOLDER'; payload: string | null }
   | { type: 'SET_LOADING'; payload: boolean }
   | { type: 'RESET_STATE' }
-  | { type: 'ENTER_FOLDER'; payload: { contents: FileEntry[]; folder: string } };
+  | { type: 'ENTER_FOLDER'; payload: { contents: MediaItem[]; folder: string } };
 
 const initialState: State = {
   selected: 0,
@@ -56,7 +56,10 @@ export const useFileReference = (text: string, setText: (text: string) => void, 
   const [state, dispatch] = useReducer(reducer, initialState);
   const { currentFiles, fetchFiles, fetchDirectoryContents } = useFileSystem(customBasePath);
   const loadingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const referenceMappingsRef = useRef<Map<string, string>>(new Map());
+  
+  const addFile = useMediaStore(state => state.addFile);
+  const addFolder = useMediaStore(state => state.addFolder);
+  const addReference = useMediaStore(state => state.addReference);
   
   const startDebouncedLoading = () => {
     // Clear any existing timeout
@@ -115,7 +118,7 @@ export const useFileReference = (text: string, setText: (text: string) => void, 
   }, [show]);
   
 
-  const handleSelection = (selectedFile?: FileEntry) => {
+  const handleSelection = async (selectedFile?: MediaItem) => {
     const file = selectedFile || files[state.selected];
     if (!file) return;
     
@@ -127,9 +130,13 @@ export const useFileReference = (text: string, setText: (text: string) => void, 
     words[words.length - 1] = `${displayReference} `;
     const newText = words.join(' ');
     
-    // Store simple mapping: filename → full path (decoupled from display format)
-    referenceMappingsRef.current.set(file.name, file.path);
-    
+    // Add file or folder to media store based on type
+    if (file.isDirectory) {
+      addFolder(file.path);
+    } else {
+      addFile(file.path);
+    }
+    addReference(displayReference, file.path);
     setText(newText);
     
     // Focus input and set cursor to end
@@ -155,7 +162,7 @@ export const useFileReference = (text: string, setText: (text: string) => void, 
     }
   };
 
-  const enterFolder = async (folder: FileEntry) => {
+  const enterFolder = async (folder: MediaItem) => {
     startDebouncedLoading();
     try {
       const contents = await fetchDirectoryContents(folder.path);
@@ -194,7 +201,7 @@ export const useFileReference = (text: string, setText: (text: string) => void, 
   };
   
   
-  const enterSelectedFolder = (file?: FileEntry) => {
+  const enterSelectedFolder = (file?: MediaItem) => {
     const selectedFile = file || files[state.selected];
     if (selectedFile?.isDirectory) {
       // Update selected state before entering
@@ -206,23 +213,6 @@ export const useFileReference = (text: string, setText: (text: string) => void, 
     }
   };
 
-  const expandFileReferences = (inputText: string): string => {
-    let expandedText = inputText;
-    
-    // For each filename in our dictionary, replace both @filename and @../filename patterns
-    for (const [filename, fullPath] of referenceMappingsRef.current) {
-      expandedText = expandedText.replace(`@${filename}`, fullPath);
-      expandedText = expandedText.replace(`@../${filename}`, fullPath);
-    }
-    
-    // Check for any remaining unresolved @references
-    const unresolvedMatches = expandedText.match(/@[^\s]+/g);
-    if (unresolvedMatches) {
-      throw new Error(`Unresolved file references: ${unresolvedMatches.join(', ')}`);
-    }
-    
-    return expandedText;
-  };
 
   return { 
     show, 
@@ -233,7 +223,6 @@ export const useFileReference = (text: string, setText: (text: string) => void, 
     isLoadingFolder: state.isLoadingFolder,
     goBack,
     enterSelectedFolder,
-    close: handleEscape,
-    expandFileReferences
+    close: handleEscape
   };
 };
