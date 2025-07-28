@@ -101,6 +101,20 @@ type SessionSummary struct {
 	IsCurrent        bool    `json:"isCurrent"`
 }
 
+// ErrorResponse represents error responses from commands
+type ErrorResponse struct {
+	Type    string `json:"type"`
+	Error   string `json:"error"`
+	Command string `json:"command,omitempty"`
+}
+
+// MessageResponse represents informational messages from commands  
+type MessageResponse struct {
+	Type    string `json:"type"`
+	Message string `json:"message"`
+	Command string `json:"command,omitempty"`
+}
+
 // BuiltinCommand represents a built-in command
 type BuiltinCommand struct {
 	name        string
@@ -118,6 +132,30 @@ func (c *BuiltinCommand) Description() string {
 
 func (c *BuiltinCommand) Execute(ctx context.Context, args string) (string, error) {
 	return c.handler(ctx, args)
+}
+
+// Helper functions for structured responses
+
+// returnError creates a structured error response
+func returnError(command, errorMsg string) (string, error) {
+	response := ErrorResponse{
+		Type:    "error",
+		Error:   errorMsg,
+		Command: command,
+	}
+	jsonData, _ := json.Marshal(response)
+	return string(jsonData), nil
+}
+
+// returnMessage creates a structured informational message response
+func returnMessage(command, message string) (string, error) {
+	response := MessageResponse{
+		Type:    "message",
+		Message: message,
+		Command: command,
+	}
+	jsonData, _ := json.Marshal(response)
+	return string(jsonData), nil
 }
 
 // GetBuiltinCommands returns all built-in commands
@@ -185,7 +223,7 @@ func createHelpHandler(registry *Registry) func(ctx context.Context, args string
 		// Convert to JSON
 		jsonData, err := json.Marshal(response)
 		if err != nil {
-			return fmt.Sprintf("Error marshaling help data: %v", err), nil
+			return returnError("help", fmt.Sprintf("Error marshaling help data: %v", err))
 		}
 
 		return string(jsonData), nil
@@ -205,11 +243,11 @@ func createSessionHandler(app *app.App) func(ctx context.Context, args string) (
 			// Show current session info
 			currentSession, err := app.GetCurrentSession(ctx)
 			if err != nil {
-				return fmt.Sprintf("Error retrieving current session: %v", err), nil
+				return returnError("session", fmt.Sprintf("Error retrieving current session: %v", err))
 			}
 			
 			if currentSession == nil {
-				return "No active session. Use /sessions to list available sessions.", nil
+				return returnMessage("session", "No active session. Use /sessions to list available sessions.")
 			}
 			
 			// Create structured response
@@ -230,13 +268,13 @@ func createSessionHandler(app *app.App) func(ctx context.Context, args string) (
 			// Convert to JSON
 			jsonData, err := json.Marshal(response)
 			if err != nil {
-				return fmt.Sprintf("Error marshaling session data: %v", err), nil
+				return returnError("session", fmt.Sprintf("Error marshaling session data: %v", err))
 			}
 			
 			return string(jsonData), nil
 		} else {
 			// Switch to specific session
-			return fmt.Sprintf("Session switching to '%s' is available via the HTTP API.", args), nil
+			return returnMessage("session", fmt.Sprintf("Session switching to '%s' is available via the HTTP API.", args))
 		}
 	}
 }
@@ -246,7 +284,7 @@ func createSessionsHandler(app *app.App) func(ctx context.Context, args string) 
 		// Get all sessions from the database
 		sessions, err := app.Sessions.List(ctx)
 		if err != nil {
-			return fmt.Sprintf("Error retrieving sessions: %v", err), nil
+			return returnError("sessions", fmt.Sprintf("Error retrieving sessions: %v", err))
 		}
 
 		// Get current session ID for comparison
@@ -278,7 +316,7 @@ func createSessionsHandler(app *app.App) func(ctx context.Context, args string) 
 		// Convert to JSON
 		jsonData, err := json.Marshal(response)
 		if err != nil {
-			return fmt.Sprintf("Error marshaling sessions data: %v", err), nil
+			return returnError("sessions", fmt.Sprintf("Error marshaling sessions data: %v", err))
 		}
 
 		return string(jsonData), nil
@@ -290,7 +328,7 @@ func createMcpHandler() func(ctx context.Context, args string) (string, error) {
 		cfg := config.Get()
 
 		if len(cfg.MCPServers) == 0 {
-			return "No MCP servers configured.\n\nTo configure MCP servers, add them to your configuration file under 'mcpServers'.", nil
+			return returnMessage("mcp", "No MCP servers configured.\n\nTo configure MCP servers, add them to your configuration file under 'mcpServers'.")
 		}
 
 		// Sort server names for consistent output
@@ -372,7 +410,7 @@ func createMcpHandler() func(ctx context.Context, args string) (string, error) {
 		// Convert to JSON
 		jsonData, err := json.Marshal(response)
 		if err != nil {
-			return fmt.Sprintf("Error marshaling MCP data: %v", err), nil
+			return returnError("mcp", fmt.Sprintf("Error marshaling MCP data: %v", err))
 		}
 
 		return string(jsonData), nil
@@ -383,11 +421,11 @@ func createContextHandler(app *app.App) func(ctx context.Context, args string) (
 	return func(ctx context.Context, args string) (string, error) {
 		currentSession, err := app.GetCurrentSession(ctx)
 		if err != nil {
-			return fmt.Sprintf("Error retrieving current session: %v", err), nil
+			return returnError("context", fmt.Sprintf("Error retrieving current session: %v", err))
 		}
 		
 		if currentSession == nil {
-			return "No active session. Use /sessions to list available sessions.", nil
+			return returnMessage("context", "No active session. Use /sessions to list available sessions.")
 		}
 
 		// Get current model's context window from agent
@@ -469,7 +507,7 @@ func createContextHandler(app *app.App) func(ctx context.Context, args string) (
 		// Convert to JSON
 		jsonData, err := json.Marshal(response)
 		if err != nil {
-			return fmt.Sprintf("Error marshaling context data: %v", err), nil
+			return returnError("context", fmt.Sprintf("Error marshaling context data: %v", err))
 		}
 
 		return string(jsonData), nil

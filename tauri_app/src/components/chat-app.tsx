@@ -131,7 +131,6 @@ export function ChatApp() {
   // History navigation state
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [originalText, setOriginalText] = useState('');
-  const [isInHistoryMode, setIsInHistoryMode] = useState(false);
 
   const { data: session, isLoading: sessionLoading, error: sessionError } = useSession();
   const createSession = useCreateSession();
@@ -191,55 +190,33 @@ export function ChatApp() {
   };
 
 
-  // History navigation helper functions
-  const enterHistoryMode = () => {
-    if (!isInHistoryMode) {
-      setOriginalText(text);
-      setIsInHistoryMode(true);
-      setHistoryIndex(-1);
-      
-      // Load initial history (both current and cross-session) if not already loaded
-      if (messageHistory.allHistory.length === 0) {
-        messageHistory.loadInitialHistory(); // Fire and forget - don't await
-      }
-    }
-  };
-
-  const exitHistoryMode = () => {
-    setIsInHistoryMode(false);
-    setHistoryIndex(-1);
-    setText(originalText);
-    setOriginalText('');
-  };
-
-  const navigateHistory = async (direction: 'up' | 'down') => {
+  const navigateHistory = (direction: 'up' | 'down') => {
     const allHistoryTexts = messageHistory.getAllHistoryTexts();
     
-    if (direction === 'up') {
-      // Go to previous (older) message
-      const newIndex = historyIndex + 1;
-      
-      if (newIndex < allHistoryTexts.length) {
-        setHistoryIndex(newIndex);
-        setText(allHistoryTexts[newIndex]);
-        
-        // Prefetch more history when getting close to the end
-        if (newIndex > allHistoryTexts.length - 10 && messageHistory.hasMoreHistory) {
-          messageHistory.loadMoreHistory();
-        }
+    // Initialize history mode on first use
+    if (historyIndex === -1 && direction === 'up') {
+      setOriginalText(text);
+      // Load initial history if not already loaded
+      if (messageHistory.allHistory.length === 0) {
+        messageHistory.loadInitialHistory();
       }
-    } else {
-      // Go to next (newer) message
-      const newIndex = historyIndex - 1;
+    }
+    
+    const newIndex = direction === 'up' ? historyIndex + 1 : historyIndex - 1;
+    
+    if (newIndex >= 0 && newIndex < allHistoryTexts.length) {
+      setHistoryIndex(newIndex);
+      setText(allHistoryTexts[newIndex]);
       
-      if (newIndex >= 0) {
-        setHistoryIndex(newIndex);
-        setText(allHistoryTexts[newIndex]);
-      } else if (newIndex === -1) {
-        // Return to original text
-        setHistoryIndex(-1);
-        setText(originalText);
+      // Prefetch more history when getting close to the end
+      if (newIndex > allHistoryTexts.length - 10 && messageHistory.hasMoreHistory) {
+        messageHistory.loadMoreHistory();
       }
+    } else if (newIndex === -1) {
+      // Return to original text
+      setHistoryIndex(-1);
+      setText(originalText);
+      setOriginalText('');
     }
   };
 
@@ -255,9 +232,11 @@ export function ChatApp() {
     }
 
     // Handle Escape key - exit history mode if active
-    if (e.key === 'Escape' && isInHistoryMode) {
+    if (e.key === 'Escape' && historyIndex !== -1) {
       e.preventDefault();
-      exitHistoryMode();
+      setHistoryIndex(-1);
+      setText(originalText);
+      setOriginalText('');
       return;
     }
 
@@ -296,21 +275,17 @@ export function ChatApp() {
 
     // Handle history navigation when not in other modes
     if (!showSlashCommands && !fileRef.show) {
-      switch (e.key) {
-        case 'ArrowUp':
-          e.preventDefault();
-          if (!isInHistoryMode) {
-            enterHistoryMode();
-          }
-          navigateHistory('up');
-          break;
-        case 'ArrowDown':
-          if (isInHistoryMode) {
-            e.preventDefault();
-            navigateHistory('down');
-          }
-          // Don't prevent default if not in history mode to allow normal cursor movement
-          break;
+      const textarea = e.currentTarget;
+      const cursorAtStart = textarea.selectionStart === 0;
+      const cursorAtEnd = textarea.selectionStart === textarea.value.length;
+      const inHistoryMode = historyIndex !== -1;
+      
+      if (e.key === 'ArrowUp' && (cursorAtStart || inHistoryMode)) {
+        e.preventDefault();
+        navigateHistory('up');
+      } else if (e.key === 'ArrowDown' && inHistoryMode && cursorAtEnd) {
+        e.preventDefault();
+        navigateHistory('down');
       }
     }
   };
@@ -363,13 +338,8 @@ export function ChatApp() {
     }
   }, [sseStream.error]);
 
-  // Handle pause state changes to add "Interrupted" message
-  useEffect(() => {
-    if (sseStream.isPaused && sseStream.processing && !interruptedMessageAddedRef.current) {
-      setMessages(prev => [...prev, { content: "Interrupted", from: 'assistant' }]);
-      interruptedMessageAddedRef.current = true;
-    }
-  }, [sseStream.isPaused, sseStream.processing]);
+  // Handle pause state changes - simplified since pausing is not implemented
+  // (Keeping this for compatibility but it won't trigger since isPaused will always be false)
 
   const submitMessage = async (messageText: string) => {
     if (!messageText || !session?.id || !sseStream.connected) {
@@ -377,8 +347,7 @@ export function ChatApp() {
     }
     
     // Exit history mode if active
-    if (isInHistoryMode) {
-      setIsInHistoryMode(false);
+    if (historyIndex !== -1) {
       setHistoryIndex(-1);
       setOriginalText('');
     }
@@ -397,8 +366,11 @@ export function ChatApp() {
     
     // Send message via persistent SSE
     try {
+      // Expand file references from display format to full paths
+      const expandedText = fileRef.expandFileReferences(messageText);
+      
       const messageData = {
-        text: messageText,
+        text: expandedText,
         media: attachedMedia.length > 0 ? attachedMedia.map(m => m.path) : undefined
       };
       await sseStream.sendMessage(JSON.stringify(messageData));
@@ -415,15 +387,7 @@ export function ChatApp() {
 
   // Handle pause/resume button clicks
   const handlePauseResumeClick = async () => {
-    try {
-      if (sseStream.isPaused) {
-        await sseStream.resumeMessage();
-      } else if (sseStream.processing) {
-        await sseStream.pauseMessage();
-      }
-    } catch (error) {
-      console.error('Failed to pause/resume:', error);
-    }
+    console.log('pausing not implemented');
   };
 
   // Handle new session creation
@@ -440,8 +404,7 @@ export function ChatApp() {
   };
 
   // Calculate submit button status and disabled state
-  const buttonStatus = sseStream.isPaused ? 'paused' : 
-                      sseStream.processing ? 'streaming' : 
+  const buttonStatus = sseStream.processing ? 'streaming' : 
                       sseStream.error ? 'error' : 'ready';
   
   // Ready state: need text/media and connection. Other states: only need connection for pause/resume

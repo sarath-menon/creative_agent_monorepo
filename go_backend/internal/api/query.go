@@ -131,8 +131,6 @@ func (h *QueryHandler) Handle(ctx context.Context, req *QueryRequest) *QueryResp
 		return h.handleMessagesHistory(ctx, req)
 	case "messages.cross-session-history":
 		return h.handleMessagesCrossSessionHistory(ctx, req)
-	case "tools.list":
-		return h.handleToolsList(ctx, req)
 	case "mcp.list":
 		return h.handleMCPList(ctx, req)
 	case "commands.list":
@@ -388,7 +386,6 @@ func (h *QueryHandler) handleSessionsCreate(ctx context.Context, req *QueryReque
 		}
 	}
 
-
 	// Optionally set as current
 	if params.SetCurrent {
 		err = h.app.SetCurrentSession(session.ID)
@@ -464,44 +461,6 @@ func (h *QueryHandler) handleSessionsDelete(ctx context.Context, req *QueryReque
 
 	return &QueryResponse{
 		Result: map[string]string{"message": "Session deleted: " + params.ID},
-		ID:     req.ID,
-	}
-}
-
-func (h *QueryHandler) handleToolsList(ctx context.Context, req *QueryRequest) *QueryResponse {
-	// Return built-in tools
-	builtinTools := []ToolData{
-		{Name: "bash", Description: "Execute shell commands"},
-		{Name: "edit", Description: "Edit files"},
-		{Name: "glob", Description: "File pattern matching"},
-		{Name: "grep", Description: "Search file contents"},
-		{Name: "ls", Description: "List directory contents"},
-		{Name: "read", Description: "Read file contents"},
-		{Name: "write", Description: "Write files"},
-		{Name: "webfetch", Description: "Fetch web content"},
-		{Name: "websearch", Description: "Search the web"},
-	}
-
-	// Add MCP tools
-	// Create temporary manager for informational listing
-	tempManager := agent.NewMCPClientManager()
-	defer tempManager.Close()
-	mcpTools := agent.GetMcpTools(ctx, h.app.Permissions, tempManager)
-	for _, tool := range mcpTools {
-		info := tool.Info()
-		builtinTools = append(builtinTools, ToolData{
-			Name:        info.Name,
-			Description: info.Description,
-		})
-	}
-
-	// Sort by name
-	sort.Slice(builtinTools, func(i, j int) bool {
-		return builtinTools[i].Name < builtinTools[j].Name
-	})
-
-	return &QueryResponse{
-		Result: builtinTools,
 		ID:     req.ID,
 	}
 }

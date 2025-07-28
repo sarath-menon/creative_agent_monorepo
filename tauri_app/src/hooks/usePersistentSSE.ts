@@ -126,11 +126,10 @@ export function usePersistentSSE(sessionId: string): PersistentSSEHook {
           finalContent: data.content || '',
           completed: true,
           processing: false, // Message processing complete
-          isPaused: false, // Clear pause state on completion
         }));
       } catch (err) {
         console.error('Failed to parse complete event:', err, event.data);
-        setState(prev => ({ ...prev, processing: false, isPaused: false }));
+        setState(prev => ({ ...prev, processing: false }));
       }
     });
 
@@ -217,7 +216,6 @@ export function usePersistentSSE(sessionId: string): PersistentSSEHook {
       finalContent: null,
       completed: false,
       processing: true, // Mark as processing when sending message
-      isPaused: false, // Clear pause state when sending new message
     }));
     
     toolCallsRef.current.clear();
@@ -250,72 +248,12 @@ export function usePersistentSSE(sessionId: string): PersistentSSEHook {
 
   // Function to pause message processing
   const pauseMessage = useCallback(async () => {
-    if (!sessionId || !connectedRef.current) {
-      throw new Error('No active SSE connection');
-    }
-
-    try {
-      const response = await fetch(`http://localhost:8088/stream/${encodeURIComponent(sessionId)}/pause`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Failed to pause session: ${response.status} ${errorText}`);
-      }
-
-      const result = await response.json();
-      
-      setState(prev => ({
-        ...prev,
-        isPaused: true,
-      }));
-    } catch (error) {
-      console.error('Failed to pause session:', error);
-      setState(prev => ({
-        ...prev,
-        error: error instanceof Error ? error.message : 'Failed to pause session',
-      }));
-      throw error;
-    }
+    console.log('pausing not implemented');
   }, [sessionId]);
 
   // Function to resume message processing
   const resumeMessage = useCallback(async () => {
-    if (!sessionId || !connectedRef.current) {
-      throw new Error('No active SSE connection');
-    }
-
-    try {
-      const response = await fetch(`http://localhost:8088/stream/${encodeURIComponent(sessionId)}/resume`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Failed to resume session: ${response.status} ${errorText}`);
-      }
-
-      const result = await response.json();
-      
-      setState(prev => ({
-        ...prev,
-        isPaused: false,
-      }));
-    } catch (error) {
-      console.error('Failed to resume session:', error);
-      setState(prev => ({
-        ...prev,
-        error: error instanceof Error ? error.message : 'Failed to resume session',
-      }));
-      throw error;
-    }
+    console.log('pausing not implemented');
   }, [sessionId]);
 
   return {

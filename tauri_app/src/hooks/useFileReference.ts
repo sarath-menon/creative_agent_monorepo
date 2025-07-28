@@ -56,6 +56,7 @@ export const useFileReference = (text: string, setText: (text: string) => void, 
   const [state, dispatch] = useReducer(reducer, initialState);
   const { currentFiles, fetchFiles, fetchDirectoryContents } = useFileSystem(customBasePath);
   const loadingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const referenceMappingsRef = useRef<Map<string, string>>(new Map());
   
   const startDebouncedLoading = () => {
     // Clear any existing timeout
@@ -122,8 +123,13 @@ export const useFileReference = (text: string, setText: (text: string) => void, 
     // Only add "../" if file path contains subdirectories
     const hasSubdirectory = file.path.includes('/');
     const prefix = hasSubdirectory ? '../' : '';
-    words[words.length - 1] = `@${prefix}${file.name} `;
+    const displayReference = `@${prefix}${file.name}`;
+    words[words.length - 1] = `${displayReference} `;
     const newText = words.join(' ');
+    
+    // Store the mapping from display reference to full path
+    referenceMappingsRef.current.set(displayReference, `@${file.path}`);
+    
     setText(newText);
     
     // Focus input and set cursor to end
@@ -200,6 +206,25 @@ export const useFileReference = (text: string, setText: (text: string) => void, 
     }
   };
 
+  const expandFileReferences = (inputText: string): string => {
+    let expandedText = inputText;
+    
+    // Find all @references in the text
+    const referenceRegex = /@[^\s]+/g;
+    const matches = inputText.match(referenceRegex);
+    
+    if (matches) {
+      for (const match of matches) {
+        const fullPath = referenceMappingsRef.current.get(match);
+        if (fullPath) {
+          expandedText = expandedText.replace(match, fullPath);
+        }
+      }
+    }
+    
+    return expandedText;
+  };
+
   return { 
     show, 
     files, 
@@ -209,6 +234,7 @@ export const useFileReference = (text: string, setText: (text: string) => void, 
     isLoadingFolder: state.isLoadingFolder,
     goBack,
     enterSelectedFolder,
-    close: handleEscape
+    close: handleEscape,
+    expandFileReferences
   };
 };

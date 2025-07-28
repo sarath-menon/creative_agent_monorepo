@@ -248,8 +248,6 @@ func setDefaults(debug bool) {
 
 // setProviderDefaults configures LLM provider defaults for embedded binary.
 func setProviderDefaults() {
-	// Set API keys from environment for supported providers
-	logging.Info("azure openai endpoint", "endpoint", os.Getenv("AZURE_OPENAI_ENDPOINT"))
 
 	if apiKey := os.Getenv("AZURE_OPENAI_ENDPOINT"); apiKey != "" {
 		// api-key may be empty when using Entra ID credentials – that's okay

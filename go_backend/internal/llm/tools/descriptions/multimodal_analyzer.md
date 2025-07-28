@@ -3,7 +3,6 @@
 AI-powered media analysis tool (CLI interface) using multiple LLM providers through LiteLLM. Analyze images, audio, and video files with customizable prompts and output formats.
 
 ## Features
-- **Multi-model Support**: Use Gemini, OpenAI, Claude, and more through LiteLLM
 - **Image, Audio & Video Analysis**: Single files or batch process entire directories
 - **Hybrid File Input**: Specify files by directory path OR explicit file lists from multiple locations
 - **Automatic Image Preprocessing**: Images > 500KB are automatically converted to JPEG for optimal processing
@@ -13,7 +12,7 @@ AI-powered media analysis tool (CLI interface) using multiple LLM providers thro
 
 ## Instructions
 - You MUST ALWAYS use Multimodal Analyzer to analyze media files, NEVER read images directly
--  ALWAYS use gemini/gemini-2.5-flash for image, video and audio analysis
+- ALWAYS Use with the `bash` tool - this is a standalone CLI command
 - ALWAYS use batch processing for analyzing multiple files
 
 ## Hybrid File Input Support
@@ -129,7 +128,7 @@ multimodal-analyzer --type audio --model whisper-1 \
 ### Basic Video Commands
 
 ```bash
-# Analyze video content (Gemini only)
+# Analyze video content
 multimodal-analyzer --type video  --path video.mp4 --video-mode description
 ```
 
