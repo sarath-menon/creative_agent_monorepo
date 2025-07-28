@@ -118,7 +118,7 @@ func (a *agent) Cancel(sessionID string) {
 	// Cancel regular requests
 	if cancelFunc, exists := a.activeRequests.LoadAndDelete(sessionID); exists {
 		if cancel, ok := cancelFunc.(context.CancelFunc); ok {
-			logging.Info(fmt.Sprintf("Request cancellation initiated for session: %s", sessionID))
+			logging.Info("Request cancellation initiated for session", "sessionID", sessionID)
 			cancel()
 		}
 	}
@@ -126,7 +126,7 @@ func (a *agent) Cancel(sessionID string) {
 	// Also check for summarize requests
 	if cancelFunc, exists := a.activeRequests.LoadAndDelete(sessionID + "-summarize"); exists {
 		if cancel, ok := cancelFunc.(context.CancelFunc); ok {
-			logging.Info(fmt.Sprintf("Summarize cancellation initiated for session: %s", sessionID))
+			logging.Info("Summarize cancellation initiated for session", "sessionID", sessionID)
 			cancel()
 		}
 	}
@@ -263,7 +263,7 @@ func (a *agent) Run(ctx context.Context, sessionID string, content string, attac
 }
 
 func (a *agent) processGeneration(ctx context.Context, sessionID, content string, attachmentParts []message.ContentPart) AgentEvent {
-	logging.Info("[Agent] Starting message processing for session %s. Content preview: %.100s...\n", sessionID, content)
+	logging.Info("[Agent] Starting message processing for session", "sessionID", sessionID, "contentPreview", fmt.Sprintf("%.100s...", content))
 	cfg := config.Get()
 	// List existing messages; if none, start title generation asynchronously.
 	msgs, err := a.messages.List(ctx, sessionID)
@@ -305,7 +305,6 @@ func (a *agent) processGeneration(ctx context.Context, sessionID, content string
 	}
 	// Append the new user message to the conversation history.
 	msgHistory := append(msgs, userMsg)
-	logging.Info("[Agent] Message history length: %d, starting generation loop for session %s\n", len(msgHistory), sessionID)
 
 	for {
 		// Check for cancellation before each iteration
@@ -317,7 +316,7 @@ func (a *agent) processGeneration(ctx context.Context, sessionID, content string
 		}
 		agentMessage, toolResults, err := a.streamAndHandleEvents(ctx, sessionID, msgHistory)
 		if err != nil {
-			logging.Info("[Agent] Stream processing failed for session %s: %v\n", sessionID, err)
+			logging.Info("[Agent] Stream processing failed for session", "sessionID", sessionID, "error", err)
 			if errors.Is(err, context.Canceled) {
 				agentMessage.AddFinish(message.FinishReasonCanceled)
 				a.messages.Update(context.Background(), agentMessage)
@@ -336,19 +335,17 @@ func (a *agent) processGeneration(ctx context.Context, sessionID, content string
 		// Enhanced tool results logging for debugging
 		if toolResults != nil {
 			for i, result := range toolResults.ToolCalls() {
-				logging.Info("[Agent] Detailed tool result - sessionID: %s, toolIndex: %d, toolCallID: %s, toolName: %s, inputLength: %d, input: %s\n",
-					sessionID, i, result.ID, result.Name, len(result.Input), result.Input)
+				logging.Info("[Agent] Detailed tool result", "sessionID", sessionID, "toolIndex", i, "toolCallID", result.ID, "toolName", result.Name, "inputLength", len(result.Input), "input", result.Input)
 			}
 		}
 		if (agentMessage.FinishReason() == message.FinishReasonToolUse) && toolResults != nil {
 			// We are not done, we need to respond with the tool response
-			logging.Info("[Agent] Tool use detected, continuing conversation loop for session %s\n", sessionID)
+			logging.Info("[Agent] Tool use detected, continuing conversation loop for session", "sessionID", sessionID)
 			msgHistory = append(msgHistory, agentMessage, *toolResults)
 			continue
 		}
 		// Publish final completion event
-		logging.Info("[Agent] Message processing completed for session %s. Final message length: %d, finish reason: %s\n",
-			sessionID, len(agentMessage.Content().String()), agentMessage.FinishReason())
+		logging.Info("[Agent] Message processing completed for session", "sessionID", sessionID, "finalMessageLength", len(agentMessage.Content().String()), "finishReason", agentMessage.FinishReason())
 		finalEvent := AgentEvent{
 			Type:      AgentEventTypeResponse,
 			Message:   agentMessage,
@@ -370,7 +367,6 @@ func (a *agent) createUserMessage(ctx context.Context, sessionID, content string
 }
 
 func (a *agent) streamAndHandleEvents(ctx context.Context, sessionID string, msgHistory []message.Message) (message.Message, *message.Message, error) {
-	logging.Info("[Agent] Starting LLM stream for session %s with %d messages in history\n", sessionID, len(msgHistory))
 	ctx = context.WithValue(ctx, tools.SessionIDContextKey, sessionID)
 	eventChan := a.provider.StreamResponse(ctx, msgHistory, a.tools)
 
@@ -400,7 +396,7 @@ func (a *agent) streamAndHandleEvents(ctx context.Context, sessionID string, msg
 
 	toolResults := make([]message.ToolResult, len(assistantMsg.ToolCalls()))
 	toolCalls := assistantMsg.ToolCalls()
-	logging.Info("[Agent] Executing %d tool calls for session %s\n", len(toolCalls), sessionID)
+	logging.Info("[Agent] Executing tool calls for session", "toolCallCount", len(toolCalls), "sessionID", sessionID)
 	for i, toolCall := range toolCalls {
 		select {
 		case <-ctx.Done():
@@ -433,9 +429,8 @@ func (a *agent) streamAndHandleEvents(ctx context.Context, sessionID string, msg
 				}
 				continue
 			}
-			logging.Info("[Agent Tool] Executing tool %s for session %s. Input size: %d\n", toolCall.Name, sessionID, len(toolCall.Input))
-			logging.Info("[Agent] Executing tool - tool: %s, sessionID: %s, toolCallID: %s, inputSize: %d, inputContent: %s\n",
-				toolCall.Name, sessionID, toolCall.ID, len(toolCall.Input), toolCall.Input)
+			logging.Info("[Agent Tool] Executing tool for session", "toolName", toolCall.Name, "sessionID", sessionID, "inputSize", len(toolCall.Input))
+			logging.Info("[Agent] Executing tool", "toolName", toolCall.Name, "sessionID", sessionID, "toolCallID", toolCall.ID, "inputSize", len(toolCall.Input), "inputContent", toolCall.Input)
 
 			toolStartTime := time.Now()
 			toolResult, toolErr := tool.Run(ctx, tools.ToolCall{
@@ -445,16 +440,13 @@ func (a *agent) streamAndHandleEvents(ctx context.Context, sessionID string, msg
 			})
 			toolDuration := time.Since(toolStartTime)
 
-			logging.Info("[Agent] Tool execution result - tool: %s, sessionID: %s, toolCallID: %s, duration: %v, error: %v, resultLength: %d, resultContent: %q, resultIsError: %t\n",
-				toolCall.Name, sessionID, toolCall.ID, toolDuration, toolErr, len(toolResult.Content), toolResult.Content, toolResult.IsError)
+			logging.Info("[Agent] Tool execution result", "toolName", toolCall.Name, "sessionID", sessionID, "toolCallID", toolCall.ID, "duration", toolDuration, "error", toolErr, "resultLength", len(toolResult.Content), "resultContent", toolResult.Content, "resultIsError", toolResult.IsError)
 
 			if toolErr != nil {
-				logging.Info("[Agent] TOOL EXECUTION ERROR - tool: %s, sessionID: %s, toolCallID: %s, error: %v\n",
-					toolCall.Name, sessionID, toolCall.ID, toolErr)
+				logging.Info("[Agent] TOOL EXECUTION ERROR", "toolName", toolCall.Name, "sessionID", sessionID, "toolCallID", toolCall.ID, "error", toolErr)
 
 				if errors.Is(toolErr, permission.ErrorPermissionDenied) {
-					logging.Info("[Agent] TOOL PERMISSION DENIED - tool: %s, sessionID: %s, toolCallID: %s\n",
-						toolCall.Name, sessionID, toolCall.ID)
+					logging.Info("[Agent] TOOL PERMISSION DENIED", "toolName", toolCall.Name, "sessionID", sessionID, "toolCallID", toolCall.ID)
 
 					toolResults[i] = message.ToolResult{
 						ToolCallID: toolCall.ID,
@@ -475,8 +467,7 @@ func (a *agent) streamAndHandleEvents(ctx context.Context, sessionID string, msg
 			// Log tool execution result
 			isError := toolErr != nil
 			resultLength := len(toolResult.Content)
-			logging.Info("[Agent Tool] Tool %s completed for session %s after %v. Result length: %d, Error: %v\n",
-				toolCall.Name, sessionID, toolDuration, resultLength, isError)
+			logging.Info("[Agent Tool] Tool completed for session", "toolName", toolCall.Name, "sessionID", sessionID, "duration", toolDuration, "resultLength", resultLength, "error", isError)
 
 			toolResults[i] = message.ToolResult{
 				ToolCallID: toolCall.ID,
@@ -541,7 +532,6 @@ func (a *agent) processEvent(ctx context.Context, sessionID string, assistantMsg
 		// Content delta streaming removed - only final content will be sent
 		return a.messages.Update(ctx, *assistantMsg)
 	case provider.EventToolUseStart:
-		logging.Info("[Agent Event] Tool use started for session %s. Tool: %s, ID: %s\n", sessionID, event.ToolCall.Name, event.ToolCall.ID)
 		assistantMsg.AddToolCall(*event.ToolCall)
 		// Publish tool start event for real-time streaming
 		a.Publish(pubsub.CreatedEvent, AgentEvent{
@@ -570,7 +560,7 @@ func (a *agent) processEvent(ctx context.Context, sessionID string, assistantMsg
 		return a.messages.Update(ctx, *assistantMsg)
 	case provider.EventError:
 		if errors.Is(event.Error, context.Canceled) {
-			logging.Info(fmt.Sprintf("Event processing canceled for session: %s", sessionID))
+			logging.Info("Event processing canceled for session", "sessionID", sessionID)
 			return context.Canceled
 		}
 		logging.Error(event.Error.Error())

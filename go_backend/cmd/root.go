@@ -361,19 +361,19 @@ func startHTTPServer(ctx context.Context, app *app.App, host string, port int) e
 	}
 
 	// Immediate feedback to user
-	logging.Info("Starting HTTP JSON-RPC server on %s...\n", addr)
+	logging.Info("Starting HTTP JSON-RPC server", "address", addr)
 
 	// Handle graceful shutdown
 	go func() {
 		<-ctx.Done()
-		logging.Info("\nShutting down HTTP server...\n")
+		logging.Info("Shutting down HTTP server")
 		server.Shutdown(context.Background())
 	}()
 
 	// Start server and provide ready confirmation
-	logging.Info("HTTP JSON-RPC server ready on %s\n", addr)
-	logging.Info("Send JSON-RPC requests to: http://%s/rpc\n", addr)
-	logging.Info("Press Ctrl+C to stop\n\n")
+	logging.Info("HTTP JSON-RPC server ready", "address", addr)
+	logging.Info("Send JSON-RPC requests", "url", fmt.Sprintf("http://%s/rpc", addr))
+	logging.Info("Press Ctrl+C to stop")
 
 	// Start server and block (this will block until server shuts down)
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {

@@ -624,5 +624,5 @@ func (g *geminiClient) logEmptyResponseDetails(sessionID string, messages []mess
 	responseJSON, _ := json.MarshalIndent(responseData, "", "  ")
 	os.WriteFile(responseFile, responseJSON, 0644)
 	
-	logging.Info("Empty response debug files created: %s, %s", requestFile, responseFile)
+	logging.Info("Empty response debug files created", "requestFile", requestFile, "responseFile", responseFile)
 }

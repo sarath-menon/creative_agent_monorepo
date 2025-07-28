@@ -194,7 +194,7 @@ func (cs *CredentialStorage) StoreOAuthCredentials(provider string, accessToken,
 		return fmt.Errorf("failed to save credentials: %w", err)
 	}
 
-	logging.Info("OAuth credentials stored for provider: %s", provider)
+	logging.Info("OAuth credentials stored for provider", "provider", provider)
 	return nil
 }
 
