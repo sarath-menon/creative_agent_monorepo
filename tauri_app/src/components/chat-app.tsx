@@ -23,12 +23,9 @@ import {
   AIToolStep,
   type AIToolStatus,
 } from '@/components/ui/kibo-ui/ai/tool';
-import { GlobeIcon, MicIcon, PlusIcon, Play, Square, Command, HelpCircle, ImageIcon, VideoIcon, AudioLines, FolderIcon, Monitor } from 'lucide-react';
-import { IconEdit, IconAppWindow, IconBrandAppstore } from '@tabler/icons-react';
+import { PlusIcon, FolderIcon } from 'lucide-react';
 import { type FormEventHandler, useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Button } from '@/components/ui/button';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { TooltipProvider } from '@/components/ui/tooltip';
 
 import { useSession, useCreateSession } from '@/hooks/useSession';
 import { useSendMessage } from '@/hooks/useMessages';
@@ -36,28 +33,17 @@ import { usePersistentSSE } from '@/hooks/usePersistentSSE';
 import { type FileEntry } from '@/hooks/useFileSystem';
 import { useFileReference } from '@/hooks/useFileReference';
 import { CommandFileReference } from './command-file-reference';
-import { useOpenApps } from '@/hooks/useOpenApps';
 import { useMediaHandler, type MediaItem } from '@/hooks/useMediaHandler';
-import { useMessageHistory } from '@/hooks/useMessageHistory';
 import { useFolderSelection } from '@/hooks/useFolderSelection';
+import { useMessageHistoryNavigation } from '@/hooks/useMessageHistoryNavigation';
+import { useMessageScrolling } from '@/hooks/useMessageScrolling';
 import { LoadingDots } from './loading-dots';
 import { MediaPreview } from './media-preview';
-import { Badge } from '@/components/ui/badge';
-import { ContextDisplay } from './context-display';
-import { HelpDisplay } from './help-display';
-import { SessionDisplay } from './session-display';
-import { SessionsDisplay } from './sessions-display';
-import { McpDisplay } from './mcp-display';
-import { AudioWaveform } from './audio-waveform';
-
-
-const slashCommands = [
-  { id: 'help', name: 'help', description: 'Get assistance and guidance', icon: HelpCircle },
-  { id: 'mcp', name: 'mcp', description: 'Model Context Protocol', icon: Command },
-  { id: 'session', name: 'session', description: 'User Session Management', icon: Command },
-  { id: 'sessions', name: 'sessions', description: 'List all available sessions', icon: Command },
-  { id: 'context', name: 'context', description: 'Show context usage breakdown', icon: Command },
-];
+import { AppDisplayPopover } from './app-display-popover';
+import { SlashCommandDropdown, shouldShowSlashCommands, handleSlashCommandNavigation, slashCommands } from './slash-command-dropdown';
+import { ResponseRenderer } from './response-renderer';
+import { MessageMediaDisplay } from './message-media-display';
+import { SessionHeader } from './session-header';
 
 
 type ToolCall = {
@@ -84,63 +70,13 @@ export function ChatApp() {
   const [inputElement, setInputElement] = useState<HTMLTextAreaElement | null>(null);
   const [showAppsPopover, setShowAppsPopover] = useState(false);
   const interruptedMessageAddedRef = useRef(false);
-  const conversationRef = useRef<HTMLDivElement>(null);
-  const userMessageRefs = useRef<(HTMLDivElement | null)[]>([]);
 
-  // Helper function to parse and render structured JSON responses
-  const renderResponseContent = (content: string) => {
-    // Handle empty responses (e.g., from /clear command)
-    if (!content || content.trim() === '') {
-      return null;
-    }
-    
-    // All slash commands return JSON, parse and route to appropriate component
-    try {
-      const parsedData = JSON.parse(content);
-      
-      // Check if it's a context response by looking for expected fields
-      if (parsedData.model && parsedData.components && Array.isArray(parsedData.components)) {
-        return <ContextDisplay data={parsedData} />;
-      }
-      
-      // Check if it's a help response by looking for type field
-      if (parsedData.type === 'help' && parsedData.commands && Array.isArray(parsedData.commands)) {
-        return <HelpDisplay data={parsedData} />;
-      }
-      
-      // Check if it's a session response by looking for type field
-      if (parsedData.type === 'session' && parsedData.id) {
-        return <SessionDisplay data={parsedData} />;
-      }
-      
-      // Check if it's a sessions response by looking for type field
-      if (parsedData.type === 'sessions' && parsedData.sessions && Array.isArray(parsedData.sessions)) {
-        return <SessionsDisplay data={parsedData} />;
-      }
-      
-      // Check if it's an MCP response by looking for type field
-      if (parsedData.type === 'mcp' && parsedData.servers && Array.isArray(parsedData.servers)) {
-        return <McpDisplay data={parsedData} />;
-      }
-      
-      // If we reach here, it's an unknown JSON structure - log and render as text
-      console.warn('Unknown JSON response structure:', parsedData);
-      return <AIResponse>{content}</AIResponse>;
-    } catch (error) {
-      // If JSON parsing fails, it's likely regular chat content
-      return <AIResponse>{content}</AIResponse>;
-    }
-  };
 
-  // History navigation state
-  const [historyIndex, setHistoryIndex] = useState(-1);
-  const [originalText, setOriginalText] = useState('');
 
   const { data: session, isLoading: sessionLoading, error: sessionError } = useSession();
   const createSession = useCreateSession();
   const sendMessage = useSendMessage();
   const sseStream = usePersistentSSE(session?.id || '');
-  const { apps: openApps, isLoading: appsLoading, error: appsError } = useOpenApps();
   const { 
     attachedMedia, 
     isDragOver, 
@@ -158,30 +94,26 @@ export function ChatApp() {
   
   const fileRef = useFileReference(text, setText, memoizedFolderPath, inputElement);
   
-  // Initialize message history hook
-  const messageHistory = useMessageHistory({
+  // Initialize new hooks
+  const historyNavigation = useMessageHistoryNavigation({
     sessionId: session?.id || '',
+    text,
+    setText,
     batchSize: 50,
   });
+
+  const { conversationRef, setUserMessageRef } = useMessageScrolling(messages, sseStream.processing);
   
-  // Filter apps to only show specified ones
-  const allowedApps = ['Notes', 'Obsidian', 'Blender', 'Pixelmator Pro'];
-  const filteredApps = openApps.filter(app => 
-    allowedApps.some(allowedApp => 
-      app.name.toLowerCase().includes(allowedApp.toLowerCase())
-    )
-  );
 
 
   const handleTextChange = (value: string) => {
     setText(value);
     
-    // Handle slash commands
-    if (value === '/' || (value.startsWith('/') && !value.includes(' '))) {
-      setShowSlashCommands(true);
+    // Handle slash commands using utility function
+    const shouldShow = shouldShowSlashCommands(value);
+    setShowSlashCommands(shouldShow);
+    if (shouldShow) {
       setSelectedCommandIndex(0);
-    } else {
-      setShowSlashCommands(false);
     }
     
     // File reference auto-managed by hook - no coordination needed!
@@ -194,35 +126,6 @@ export function ChatApp() {
   };
 
 
-  const navigateHistory = (direction: 'up' | 'down') => {
-    const allHistoryTexts = messageHistory.getAllHistoryTexts();
-    
-    // Initialize history mode on first use
-    if (historyIndex === -1 && direction === 'up') {
-      setOriginalText(text);
-      // Load initial history if not already loaded
-      if (messageHistory.allHistory.length === 0) {
-        messageHistory.loadInitialHistory();
-      }
-    }
-    
-    const newIndex = direction === 'up' ? historyIndex + 1 : historyIndex - 1;
-    
-    if (newIndex >= 0 && newIndex < allHistoryTexts.length) {
-      setHistoryIndex(newIndex);
-      setText(allHistoryTexts[newIndex]);
-      
-      // Prefetch more history when getting close to the end
-      if (newIndex > allHistoryTexts.length - 10 && messageHistory.hasMoreHistory) {
-        messageHistory.loadMoreHistory();
-      }
-    } else if (newIndex === -1) {
-      // Return to original text
-      setHistoryIndex(-1);
-      setText(originalText);
-      setOriginalText('');
-    }
-  };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     // Handle Cmd+Enter for form submission (fallback)
@@ -235,40 +138,16 @@ export function ChatApp() {
       return;
     }
 
-    // Handle Escape key - exit history mode if active
-    if (e.key === 'Escape' && historyIndex !== -1) {
-      e.preventDefault();
-      setHistoryIndex(-1);
-      setText(originalText);
-      setOriginalText('');
-      return;
-    }
-
-    // Handle slash command navigation only when dropdown is visible
-    if (showSlashCommands) {
-      switch (e.key) {
-        case 'ArrowDown':
-          e.preventDefault();
-          setSelectedCommandIndex((prev) => 
-            prev < slashCommands.length - 1 ? prev + 1 : 0
-          );
-          break;
-        case 'ArrowUp':
-          e.preventDefault();
-          setSelectedCommandIndex((prev) => 
-            prev > 0 ? prev - 1 : slashCommands.length - 1
-          );
-          break;
-        case 'Enter':
-          e.preventDefault();
-          handleSlashCommandSelect(slashCommands[selectedCommandIndex]);
-          break;
-        case 'Escape':
-          e.preventDefault();
-          setShowSlashCommands(false);
-          break;
-      }
-    }
+    // Handle slash command navigation
+    const slashHandled = handleSlashCommandNavigation(
+      e,
+      showSlashCommands,
+      selectedCommandIndex,
+      setSelectedCommandIndex,
+      handleSlashCommandSelect,
+      () => setShowSlashCommands(false)
+    );
+    if (slashHandled) return;
 
     // Handle Escape key to close file reference popup
     if (fileRef.show && e.key === 'Escape') {
@@ -278,37 +157,13 @@ export function ChatApp() {
     }
 
     // Handle history navigation when not in other modes
-    if (!showSlashCommands && !fileRef.show) {
-      const textarea = e.currentTarget;
-      const cursorAtStart = textarea.selectionStart === 0;
-      const cursorAtEnd = textarea.selectionStart === textarea.value.length;
-      const inHistoryMode = historyIndex !== -1;
-      
-      if (e.key === 'ArrowUp' && (cursorAtStart || inHistoryMode)) {
-        e.preventDefault();
-        navigateHistory('up');
-      } else if (e.key === 'ArrowDown' && inHistoryMode && cursorAtEnd) {
-        e.preventDefault();
-        navigateHistory('down');
-      }
-    }
+    const historyHandled = historyNavigation.handleHistoryNavigation(
+      e,
+      showSlashCommands || fileRef.show
+    );
+    if (historyHandled) return;
   };
 
-  // Auto-scroll to last user message when messages change
-  useEffect(() => {
-    // Find the index of the last user message
-    const lastUserMessageIndex = messages.findLastIndex(m => m.from === 'user');
-    
-    if (lastUserMessageIndex !== -1 && userMessageRefs.current[lastUserMessageIndex]) {
-      // Use setTimeout to ensure DOM updates are complete
-      setTimeout(() => {
-        userMessageRefs.current[lastUserMessageIndex]?.scrollIntoView({ 
-          behavior: 'smooth',
-          block: 'start'
-        });
-      }, 0);
-    }
-  }, [messages, sseStream.processing]);
 
   // Handle completion of streaming
   useEffect(() => {
@@ -351,10 +206,7 @@ export function ChatApp() {
     }
     
     // Exit history mode if active
-    if (historyIndex !== -1) {
-      setHistoryIndex(-1);
-      setOriginalText('');
-    }
+    historyNavigation.resetHistoryMode();
     
     // Add user message to conversation and clear input immediately
     setMessages(prev => [...prev, { 
@@ -395,16 +247,11 @@ export function ChatApp() {
   };
 
   // Handle new session creation
-  const handleNewSession = async () => {
-    try {
-      await createSession.mutateAsync({ title: "Chat Session" });
-      setMessages([]);
-      setText('');
-      clearMedia();
-      interruptedMessageAddedRef.current = false;
-    } catch (error) {
-      console.error('Failed to create new session:', error);
-    }
+  const handleNewSession = () => {
+    setMessages([]);
+    setText('');
+    clearMedia();
+    interruptedMessageAddedRef.current = false;
   };
 
   // Calculate submit button status and disabled state
@@ -420,16 +267,7 @@ export function ChatApp() {
     <TooltipProvider>
       <div className="flex flex-col h-screen px-4 pb-4">
       {/* Header with New Session Button */}
-      <div className="flex justify-end">
-        <button
-          onClick={handleNewSession}
-          disabled={createSession.isPending}
-          className="flex items-center gap-2  text-sm font-medium text-stone-500 hover:text-stone-100 hover:bg-stone-700/50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          title="Start New Session"
-        >
-          <IconEdit className="size-5" />
-        </button>
-      </div>
+      <SessionHeader onNewSession={handleNewSession} />
       
       {/* Conversation Display */}
       <div ref={conversationRef} className="relative h-full flex-1 overflow-y-auto">
@@ -438,79 +276,14 @@ export function ChatApp() {
             <AIMessage 
               from={message.from} 
               key={index}
-              ref={message.from === 'user' ? (el) => userMessageRefs.current[index] = el : undefined}
+              ref={message.from === 'user' ? setUserMessageRef(index) : undefined}
             >
               <AIMessageContent >
                 {message.from === 'assistant' ? (
-                  renderResponseContent(message.content)
+                  <ResponseRenderer content={message.content} />
                 ) : (
                   <div>
-                    {message.media && message.media.length > 0 && (
-                      <div className="flex flex-wrap gap-2 mb-2">
-                        {message.media.map((media, index) => (
-                          <div key={index} className="relative">
-                            {media.type === 'image' ? (
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <div>
-                                    <img 
-                                      src={media.preview} 
-                                      alt={media.name}
-                                      className="max-w-xs max-h-48 object-cover rounded-lg"
-                                    />
-                                  </div>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  <p>{media.name}</p>
-                                </TooltipContent>
-                              </Tooltip>
-                            ) : media.type === 'video' ? (
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <div className="relative">
-                                    <video 
-                                      src={media.preview}
-                                      className="max-w-xs max-h-48 object-cover rounded-lg"
-                                      preload="metadata"
-                                      onLoadedMetadata={(e) => {
-                                        e.currentTarget.currentTime = 1;
-                                      }}
-                                      onError={(e) => {
-                                        console.error('❌ [Media Debug] Video failed to load in chat:', { 
-                                          name: media.name, 
-                                          src: media.preview,
-                                          error: e 
-                                        });
-                                      }}
-                                    />
-                                    <Play className="absolute bottom-2 left-2 size-8 text-white bg-black/30 rounded-full  p-0.5"/>
-                                  </div>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  <p>{media.name}</p>
-                                </TooltipContent>
-                              </Tooltip>
-                            ) : media.type === 'audio' ? (
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <div className="bg-stone-700/50 rounded-lg p-4 max-w-xs">
-                                    <AudioWaveform className="h-12 w-16" />
-                                  </div>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  <p>{media.name}</p>
-                                </TooltipContent>
-                              </Tooltip>
-                            ) : (
-                              <div className="flex items-center gap-2 bg-stone-700/50 rounded-lg p-3">
-                                <ImageIcon className="w-6 h-6 text-stone-400" />
-                                <span className="text-sm text-stone-300">{media.name}</span>
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                    <MessageMediaDisplay media={message.media || []} />
                     {message.content}
                   </div>
                 )}
@@ -620,39 +393,10 @@ export function ChatApp() {
               <AIInputButton onClick={selectFolder} title={selectedFolder ? `Current folder: ${selectedFolder}` : 'Select parent folder'}>
                 <FolderIcon className={`size-6 ${selectedFolder ? 'text-blue-400' : ''}`} />
               </AIInputButton>
-              <Popover open={showAppsPopover} onOpenChange={setShowAppsPopover}>
-                <PopoverTrigger asChild>
-                  <AIInputButton title="View open applications">
-                    <IconBrandAppstore className='size-6' />
-                  </AIInputButton>
-                </PopoverTrigger>
-                <PopoverContent className="w-80" align="end">
-                  <div className="space-y-2">
-                    <h4 className="font-medium leading-none">Open Applications</h4>
-                    {appsLoading && filteredApps.length === 0 ? (
-                      <div className="flex items-center gap-2 py-2 text-muted-foreground">
-                        <LoadingDots />
-                        <span className="text-xs">Loading applications...</span>
-                      </div>
-                    ) : filteredApps.length > 0 ? (
-                      <div className="flex flex-wrap gap-2">
-                        {filteredApps.map((app) => (
-                          <Badge key={app.name} variant="secondary" className="text-xs flex items-center gap-1.5">
-                            <img 
-                              src={`data:image/png;base64,${app.icon_png_base64}`} 
-                              alt={`${app.name} icon`}
-                              className="size-4 rounded-sm"
-                            />
-                            {app.name}
-                          </Badge>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-sm text-muted-foreground">No supported applications are currently open.</p>
-                    )}
-                  </div>
-                </PopoverContent>
-              </Popover>
+              <AppDisplayPopover 
+                isOpen={showAppsPopover}
+                onOpenChange={setShowAppsPopover}
+              />
             </AIInputTools>
             <AIInputSubmit 
               disabled={isSubmitDisabled}
@@ -664,30 +408,11 @@ export function ChatApp() {
         </div>
         
         {/* Slash Command Dropdown */}
-        {showSlashCommands && (
-          <div className="absolute bottom-full left-0 right-0 mb-2 bg-popover border border-border rounded-xl shadow-lg z-50 overflow-hidden p-2">
-            {slashCommands.map((command, index) => {
-              const Icon = command.icon;
-              return (
-                <div
-                  key={command.id}
-                  className={`flex items-center gap-3 px-3 py-2 cursor-pointer transition-colors ${
-                    index === selectedCommandIndex 
-                      ? 'bg-muted/80  rounded-md' 
-                      : 'hover:bg-muted/30'
-                  }`}
-                  onClick={() => handleSlashCommandSelect(command)}
-                >
-                  <Icon className="size-4 text-muted-foreground" />
-                  <div className="flex-1">
-                    <div className="font-medium">/{command.name}</div>
-                    <div className="text-xs text-muted-foreground">{command.description}</div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
+        <SlashCommandDropdown 
+          isVisible={showSlashCommands}
+          selectedIndex={selectedCommandIndex}
+          onCommandSelect={handleSlashCommandSelect}
+        />
 
         {/* File Reference Dropdown with Command Component */}
         {fileRef.show && (

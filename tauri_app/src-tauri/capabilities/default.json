@@ -9,6 +9,7 @@
     "core:default",
     "opener:default",
     "shell:default",
+    "macos-permissions:default",
     "shell:allow-spawn",
     {
       "identifier": "shell:allow-execute",

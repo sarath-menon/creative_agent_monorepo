@@ -15,7 +15,7 @@ export const MediaPreview = ({ attachedMedia, onRemoveItem }: MediaPreviewProps)
 
   return (
     <div className="px-2  border-b-0">
-      <div className="flex gap-2 overflow-x-auto scrollbar-hide">
+      <div className="flex gap-2  scrollbar-hide">
         {attachedMedia.map((media, index) => (
           <div key={index} className="relative group flex-shrink-0">
             <Tooltip>
