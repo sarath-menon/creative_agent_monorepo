@@ -1,7 +1,7 @@
 # Claude Code Integration
 
-This project uses `.opencode/commands/` for custom slash commands (independent from Claude Code's `.claude/commands/` system).
-Users can add `.md` files to `.opencode/commands/` or `~/.opencode/commands/` to create custom commands.
+This project uses `.recreate/commands/` for custom slash commands (independent from Claude Code's `.claude/commands/` system).
+Users can add `.md` files to `.recreate/commands/` or `~/.recreate/commands/` to create custom commands.
 
 ## Development Commands
 

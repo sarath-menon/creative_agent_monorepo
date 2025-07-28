@@ -46,10 +46,10 @@ build-errors.log
 .env
 .env.local
 
-.opencode/
+.recreate/
 
-opencode
-opencode.md
+recreate
+recreate.md
 
 tools/blender/__pycache__
 

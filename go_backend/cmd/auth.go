@@ -31,7 +31,7 @@ Supported providers:
   - anthropic-claude-pro-max: Authenticate with Claude using OAuth
 
 Example:
-  opencode auth add anthropic-claude-pro-max`,
+  recreate auth add anthropic-claude-pro-max`,
 	Args: cobra.ExactArgs(1),
 	RunE: handleAuthAdd,
 }
@@ -71,7 +71,7 @@ func handleAuthStatus(cmd *cobra.Command, args []string) error {
 		if creds.IsTokenExpired() {
 			fmt.Printf("⚠️  Anthropic Claude Pro Max: Token expired, refresh needed\n")
 		} else {
-			fmt.Printf("✅ Anthropic Claude Pro Max: Authenticated (expires in ~%.0f minutes)\n", 
+			fmt.Printf("✅ Anthropic Claude Pro Max: Authenticated (expires in ~%.0f minutes)\n",
 				float64(creds.ExpiresAt-time.Now().Unix())/60)
 		}
 	} else {
@@ -79,7 +79,7 @@ func handleAuthStatus(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Println("\nTo authenticate with Claude Code OAuth:")
-	fmt.Println("  opencode auth add anthropic-claude-pro-max")
+	fmt.Println("  recreate auth add anthropic-claude-pro-max")
 
 	return nil
 }
@@ -100,15 +100,15 @@ func handleAnthropicOAuth() error {
 		logging.Warn("Error checking existing credentials: %v", err)
 	} else if existingCreds != nil && !existingCreds.IsTokenExpired() {
 		fmt.Printf("✅ Already authenticated with Claude Code OAuth!\n")
-		fmt.Printf("   Token expires in ~%.0f minutes\n", 
+		fmt.Printf("   Token expires in ~%.0f minutes\n",
 			float64(existingCreds.ExpiresAt-time.Now().Unix())/60)
 		fmt.Println()
-		
+
 		reader := bufio.NewReader(os.Stdin)
 		fmt.Print("Do you want to re-authenticate? (y/N): ")
 		response, _ := reader.ReadString('\n')
 		response = strings.TrimSpace(strings.ToLower(response))
-		
+
 		if response != "y" && response != "yes" {
 			fmt.Println("Authentication cancelled.")
 			return nil
@@ -127,7 +127,7 @@ func handleAnthropicOAuth() error {
 	fmt.Printf("🌐 Opening browser for authentication...\n")
 	fmt.Printf("   URL: %s\n", authURL)
 	fmt.Println()
-	
+
 	// Important: User must be logged into Claude
 	fmt.Printf("⚠️  IMPORTANT: You must be logged into claude.ai in your browser first!\n")
 	fmt.Printf("   If you're not logged in, please:\n")
@@ -160,7 +160,7 @@ func handleAnthropicOAuth() error {
 		if err != nil {
 			return fmt.Errorf("failed to read input: %w", err)
 		}
-		
+
 		authCode = strings.TrimSpace(input)
 		if authCode != "" {
 			break
@@ -200,7 +200,7 @@ func handleAnthropicOAuth() error {
 	fmt.Println()
 	fmt.Println("🎉 Authentication successful!")
 	fmt.Printf("   ✅ OAuth tokens stored securely\n")
-	fmt.Printf("   ⏰ Token expires in ~%.0f minutes\n", 
+	fmt.Printf("   ⏰ Token expires in ~%.0f minutes\n",
 		float64(credentials.ExpiresAt-time.Now().Unix())/60)
 	fmt.Printf("   🔄 Automatic refresh enabled\n")
 	fmt.Println()

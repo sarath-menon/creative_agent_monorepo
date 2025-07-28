@@ -109,7 +109,7 @@ func (m *MCPClientManager) GetClient(ctx context.Context, serverName string, mcp
 	initRequest := mcp.InitializeRequest{}
 	initRequest.Params.ProtocolVersion = mcp.LATEST_PROTOCOL_VERSION
 	initRequest.Params.ClientInfo = mcp.Implementation{
-		Name:    "OpenCode",
+		Name:    "Recreate",
 		Version: version.Version,
 	}
 
@@ -244,7 +244,7 @@ func shouldIncludeTool(toolName string, allowedTools []string, deniedTools []str
 		}
 		return false // Tool not in allowlist
 	}
-	
+
 	// If deniedTools is specified and not empty, exclude tools in the denylist
 	if len(deniedTools) > 0 {
 		for _, denied := range deniedTools {
@@ -253,11 +253,10 @@ func shouldIncludeTool(toolName string, allowedTools []string, deniedTools []str
 			}
 		}
 	}
-	
+
 	// Default: include the tool (no filtering or tool not in denylist)
 	return true
 }
-
 
 func getTools(ctx context.Context, name string, m config.MCPServer, permissions permission.Service, manager *MCPClientManager) []tools.BaseTool {
 	var mcpTools []tools.BaseTool
@@ -280,7 +279,7 @@ func getTools(ctx context.Context, name string, m config.MCPServer, permissions 
 	// Create tool instances with the manager, applying filtering if configured
 	for _, t := range tools.Tools {
 		toolName := t.Name
-		
+
 		// Apply tool filtering based on configuration
 		if shouldIncludeTool(toolName, m.AllowedTools, m.DeniedTools) {
 			mcpTools = append(mcpTools, NewMcpTool(name, t, permissions, m, manager))
@@ -299,4 +298,3 @@ func GetMcpTools(ctx context.Context, permissions permission.Service, manager *M
 
 	return allTools
 }
-

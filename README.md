@@ -44,7 +44,7 @@ npm run tauri dev
 
 The system requires explicit model configuration for both main and sub-agents. 
 
-**Step 1:** Create a configuration file (`.opencode.json`) in your home directory or project root:
+**Step 1:** Create a configuration file (`.recreate.json`) in your home directory or project root:
 
 ```json
 {

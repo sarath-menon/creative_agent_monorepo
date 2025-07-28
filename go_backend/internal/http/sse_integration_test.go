@@ -50,11 +50,11 @@ type SSEEvent struct {
 // Test utilities
 func setupTestServer(t *testing.T) (*httptest.Server, *app.App, string) {
 	// Set up test configuration properly
-	testConfigDir := "/tmp/test-opencode-" + t.Name()
-	testDataDir := "/tmp/test-opencode-data-" + t.Name()
+	testConfigDir := "/tmp/test-recreate-" + t.Name()
+	testDataDir := "/tmp/test-recreate-data-" + t.Name()
 
-	os.Setenv("OPENCODE_CONFIG_DIR", testConfigDir)
-	os.Setenv("OPENCODE_DATA_DIR", testDataDir)
+	os.Setenv("_CONFIG_DIR", testConfigDir)
+	os.Setenv("_DATA_DIR", testDataDir)
 
 	// Create test directories
 	os.MkdirAll(testConfigDir, 0755)
@@ -86,7 +86,6 @@ func setupTestServer(t *testing.T) (*httptest.Server, *app.App, string) {
 	if err != nil {
 		t.Fatalf("Failed to create test session: %v", err)
 	}
-
 
 	// Create HTTP handler
 	handler := api.NewQueryHandler(testApp)
@@ -180,51 +179,51 @@ func parseIntegrationSSEStream(t *testing.T, response *http.Response) []SSEEvent
 // Helper function to connect to persistent SSE stream
 func connectSSE(t *testing.T, serverURL, sessionID string) (*http.Response, context.CancelFunc) {
 	url := fmt.Sprintf("%s/stream?sessionId=%s", serverURL, sessionID)
-	
+
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	
+
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		cancel()
 		t.Fatalf("Failed to create SSE request: %v", err)
 	}
 	req.Header.Set("Accept", "text/event-stream")
-	
+
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
 		cancel()
 		t.Fatalf("Failed to connect to SSE stream: %v", err)
 	}
-	
+
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
 		cancel()
 		t.Fatalf("Expected status 200, got %d. Response: %s", resp.StatusCode, string(body))
 	}
-	
+
 	return resp, cancel
 }
 
 // Helper function to send message to queue
 func sendMessageToQueue(t *testing.T, serverURL, sessionID, content string) {
 	url := fmt.Sprintf("%s/stream/%s/message", serverURL, sessionID)
-	
+
 	reqData := map[string]string{"content": content}
 	jsonData, _ := json.Marshal(reqData)
-	
+
 	resp, err := http.Post(url, "application/json", strings.NewReader(string(jsonData)))
 	if err != nil {
 		t.Fatalf("Failed to send message to queue: %v", err)
 	}
 	defer resp.Body.Close()
-	
+
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		t.Fatalf("Expected status 200 for message queue, got %d. Response: %s", resp.StatusCode, string(body))
 	}
-	
+
 	t.Logf("Message queued successfully: %s", content)
 }
 
@@ -232,16 +231,16 @@ func sendMessageToQueue(t *testing.T, serverURL, sessionID, content string) {
 func waitForEvents(t *testing.T, resp *http.Response, expectedMinEvents int, timeout time.Duration) []SSEEvent {
 	var events []SSEEvent
 	eventChan := make(chan SSEEvent, 10)
-	
+
 	// Start parsing events in background
 	go func() {
 		defer close(eventChan)
 		scanner := bufio.NewScanner(resp.Body)
-		
+
 		var currentEvent SSEEvent
 		for scanner.Scan() {
 			line := strings.TrimSpace(scanner.Text())
-			
+
 			if line == "" {
 				// Empty line indicates end of event
 				if currentEvent.Type != "" {
@@ -250,7 +249,7 @@ func waitForEvents(t *testing.T, resp *http.Response, expectedMinEvents int, tim
 				}
 				continue
 			}
-			
+
 			if strings.HasPrefix(line, "event: ") {
 				currentEvent.Type = strings.TrimPrefix(line, "event: ")
 			} else if strings.HasPrefix(line, "data: ") {
@@ -263,17 +262,17 @@ func waitForEvents(t *testing.T, resp *http.Response, expectedMinEvents int, tim
 				currentEvent.Data = data
 			}
 		}
-		
+
 		// Handle last event if stream ended without empty line
 		if currentEvent.Type != "" {
 			eventChan <- currentEvent
 		}
 	}()
-	
+
 	// Collect events until we have enough or timeout
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	
+
 	for {
 		select {
 		case event, ok := <-eventChan:
@@ -286,12 +285,12 @@ func waitForEvents(t *testing.T, resp *http.Response, expectedMinEvents int, tim
 				return events
 			}
 			events = append(events, event)
-			
+
 			// Return early if we have enough events
 			if len(events) >= expectedMinEvents {
 				return events
 			}
-			
+
 		case <-ctx.Done():
 			t.Logf("Timeout reached, got %d events, expected at least %d", len(events), expectedMinEvents)
 			for i, event := range events {
@@ -615,7 +614,7 @@ func TestPersistentConnection(t *testing.T) {
 
 	// Wait for initial connected event
 	events := waitForEvents(t, resp, 1, 5*time.Second)
-	
+
 	if len(events) != 1 || events[0].Type != "connected" {
 		t.Fatalf("Expected exactly 1 connected event, got %d events", len(events))
 	}
@@ -646,13 +645,13 @@ func TestMultipleMessages(t *testing.T) {
 
 	// Send first message
 	sendMessageToQueue(t, server.URL, sessionID, "First message")
-	
+
 	// Send second message quickly
 	sendMessageToQueue(t, server.URL, sessionID, "Second message")
-	
+
 	// Wait for all events (connected + 2 complete events)
 	allEvents := waitForEvents(t, resp, 3, 30*time.Second)
-	
+
 	if len(allEvents) < 3 {
 		t.Fatalf("Expected at least 3 events (connected + 2 complete), got %d", len(allEvents))
 	}

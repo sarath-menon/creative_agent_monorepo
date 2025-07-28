@@ -84,9 +84,9 @@ type Config struct {
 
 // Application constants
 const (
-	defaultDataDirectory = ".opencode"
+	defaultDataDirectory = ".recreate"
 	defaultLogLevel      = "info"
-	appName              = "opencode"
+	appName              = "recreate"
 
 	MaxTokensFallbackDefault = 4096
 )
@@ -138,7 +138,7 @@ func Load(workingDir string, debug bool, skipPermissions bool) (*Config, error) 
 	if cfg.Debug {
 		defaultLevel = slog.LevelDebug
 	}
-	if os.Getenv("OPENCODE_DEV_DEBUG") == "true" {
+	if os.Getenv("_DEV_DEBUG") == "true" {
 		loggingFile := fmt.Sprintf("%s/%s", cfg.Data.Directory, "debug.log")
 		messagesPath := fmt.Sprintf("%s/%s", cfg.Data.Directory, "messages")
 

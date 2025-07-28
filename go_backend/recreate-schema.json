@@ -97,7 +97,7 @@
       "type": "object"
     }
   },
-  "description": "Configuration schema for the OpenCode application",
+  "description": "Configuration schema for the Recreate application",
   "properties": {
     "agents": {
       "additionalProperties": {
@@ -212,12 +212,12 @@
         ".cursor/rules/",
         "CLAUDE.md",
         "CLAUDE.local.md",
-        "opencode.md",
-        "opencode.local.md",
-        "OpenCode.md",
-        "OpenCode.local.md",
-        "OPENCODE.md",
-        "OPENCODE.local.md"
+        "recreate.md",
+        "recreate.local.md",
+        "Recreate.md",
+        "Recreate.local.md",
+        "RECREATE.md",
+        "RECREATE.local.md"
       ],
       "description": "Context paths for the application",
       "items": {
@@ -229,7 +229,7 @@
       "description": "Storage configuration",
       "properties": {
         "directory": {
-          "default": ".opencode",
+          "default": ".recreate",
           "description": "Directory where application data is stored",
           "type": "string"
         }
@@ -347,6 +347,6 @@
       "type": "string"
     }
   },
-  "title": "OpenCode Configuration",
+  "title": "Recreate Configuration",
   "type": "object"
 }

@@ -30,7 +30,7 @@
 
 //         let shell = app.shell();
 
-//         match shell.sidecar("opencode") {
+//         match shell.sidecar("recreate") {
 //             Ok(command) => {
 //                 let command = command.args(["--http-mode"]);
 //                 match command.spawn() {
@@ -169,9 +169,9 @@
 //                     match response.json::<serde_json::Value>().await {
 //                         Ok(data) => {
 //                             if let Some(status) = data.get("status").and_then(|s| s.as_str()) {
-//                                 Ok(format!("OpenCode health check: {}", status))
+//                                 Ok(format!("Recreate health check: {}", status))
 //                             } else {
-//                                 Ok("OpenCode health check successful".to_string())
+//                                 Ok("Recreate health check successful".to_string())
 //                             }
 //                         }
 //                         Err(e) => Err(format!("Failed to parse response: {}", e)),

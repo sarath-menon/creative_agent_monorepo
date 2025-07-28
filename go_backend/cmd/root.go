@@ -26,27 +26,27 @@ import (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "opencode",
+	Use:   "recreate",
 	Short: "AI assistant for software development with CLI and HTTP API",
-	Long: `OpenCode is a powerful AI assistant that helps with software development tasks.
+	Long: `Recreate is a powerful AI assistant that helps with software development tasks.
 It provides both CLI-only mode for direct prompt processing and an HTTP API 
 for AI capabilities, file operations, and MCP integration to assist in video generation 
 and content creation workflows.`,
 	Example: `
   # CLI mode with prompt (direct output)
-  opencode -p "Explain the use of context in Go"
+  recreate -p "Explain the use of context in Go"
 
   # CLI mode with JSON output format
-  opencode -p "Explain the use of context in Go" -f json
+  recreate -p "Explain the use of context in Go" -f json
 
   # Start HTTP API server
-  opencode --http-port 8080
+  recreate --http-port 8080
 
   # Run with debug logging
-  opencode -d -p "Your prompt here"
+  recreate -d -p "Your prompt here"
 
   # Print version
-  opencode -v
+  recreate -v
   `,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// If the help flag is set, show the help message
@@ -270,7 +270,7 @@ func startHTTPServer(ctx context.Context, app *app.App, host string, port int) e
 	// Add debug endpoint
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain")
-		fmt.Fprintf(w, "OpenCode HTTP JSON-RPC Server\nPath: %s\nMethod: %s\n", r.URL.Path, r.Method)
+		fmt.Fprintf(w, "Recreate HTTP JSON-RPC Server\nPath: %s\nMethod: %s\n", r.URL.Path, r.Method)
 	})
 
 	// Add SSE streaming endpoint
