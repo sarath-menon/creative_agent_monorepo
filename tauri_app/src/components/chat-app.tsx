@@ -23,10 +23,12 @@ import {
   AIToolStep,
   type AIToolStatus,
 } from '@/components/ui/kibo-ui/ai/tool';
-import { GlobeIcon, MicIcon, PlusIcon, Play, Square, Command, HelpCircle, ImageIcon, FolderIcon } from 'lucide-react';
-import { IconEdit } from '@tabler/icons-react';
+import { GlobeIcon, MicIcon, PlusIcon, Play, Square, Command, HelpCircle, ImageIcon, VideoIcon, AudioLines, FolderIcon, Monitor } from 'lucide-react';
+import { IconEdit, IconAppWindow, IconBrandAppstore } from '@tabler/icons-react';
 import { type FormEventHandler, useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
 import { useSession, useCreateSession } from '@/hooks/useSession';
 import { useSendMessage } from '@/hooks/useMessages';
@@ -46,6 +48,7 @@ import { HelpDisplay } from './help-display';
 import { SessionDisplay } from './session-display';
 import { SessionsDisplay } from './sessions-display';
 import { McpDisplay } from './mcp-display';
+import { AudioWaveform } from './audio-waveform';
 
 
 const slashCommands = [
@@ -79,6 +82,7 @@ export function ChatApp() {
   const [showSlashCommands, setShowSlashCommands] = useState(false);
   const [selectedCommandIndex, setSelectedCommandIndex] = useState(0);
   const [inputElement, setInputElement] = useState<HTMLTextAreaElement | null>(null);
+  const [showAppsPopover, setShowAppsPopover] = useState(false);
   const interruptedMessageAddedRef = useRef(false);
   const conversationRef = useRef<HTMLDivElement>(null);
   const userMessageRefs = useRef<(HTMLDivElement | null)[]>([]);
@@ -413,7 +417,8 @@ export function ChatApp() {
     : (!session?.id || sessionLoading || !sseStream.connected);
 
   return (
-    <div className="flex flex-col h-screen px-4 pb-4">
+    <TooltipProvider>
+      <div className="flex flex-col h-screen px-4 pb-4">
       {/* Header with New Session Button */}
       <div className="flex justify-end">
         <button
@@ -445,11 +450,57 @@ export function ChatApp() {
                         {message.media.map((media, index) => (
                           <div key={index} className="relative">
                             {media.type === 'image' ? (
-                              <img 
-                                src={media.preview} 
-                                alt={media.name}
-                                className="max-w-xs max-h-48 object-cover rounded-lg"
-                              />
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <div>
+                                    <img 
+                                      src={media.preview} 
+                                      alt={media.name}
+                                      className="max-w-xs max-h-48 object-cover rounded-lg"
+                                    />
+                                  </div>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>{media.name}</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            ) : media.type === 'video' ? (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <div className="relative">
+                                    <video 
+                                      src={media.preview}
+                                      className="max-w-xs max-h-48 object-cover rounded-lg"
+                                      preload="metadata"
+                                      onLoadedMetadata={(e) => {
+                                        e.currentTarget.currentTime = 1;
+                                      }}
+                                      onError={(e) => {
+                                        console.error('❌ [Media Debug] Video failed to load in chat:', { 
+                                          name: media.name, 
+                                          src: media.preview,
+                                          error: e 
+                                        });
+                                      }}
+                                    />
+                                    <Play className="absolute bottom-2 left-2 size-8 text-white bg-black/30 rounded-full  p-0.5"/>
+                                  </div>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>{media.name}</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            ) : media.type === 'audio' ? (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <div className="bg-stone-700/50 rounded-lg p-4 max-w-xs">
+                                    <AudioWaveform className="h-12 w-16" />
+                                  </div>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>{media.name}</p>
+                                </TooltipContent>
+                              </Tooltip>
                             ) : (
                               <div className="flex items-center gap-2 bg-stone-700/50 rounded-lg p-3">
                                 <ImageIcon className="w-6 h-6 text-stone-400" />
@@ -534,30 +585,11 @@ export function ChatApp() {
         </div>
       </div>
 
-      {/* Open Apps Display */}
-      {(filteredApps.length > 0 || appsLoading) && (
-        <div className="max-w-4xl mx-auto w-full mb-2">
-          {appsLoading && filteredApps.length === 0 ? (
-            <div className="flex items-center gap-2 px-2 py-2 text-muted-foreground">
-              <LoadingDots />
-              <span className="text-xs">Loading applications...</span>
-            </div>
-          ) : (
-            <div className="flex flex-wrap gap-2">
-              {filteredApps.map((app) => (
-                <Badge key={app.name} variant="secondary" className="text-xs flex items-center gap-1.5">
-                  <img 
-                    src={`data:image/png;base64,${app.icon_png_base64}`} 
-                    alt={`${app.name} icon`}
-                    className="size-4 rounded-sm"
-                  />
-                  {app.name}
-                </Badge>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+
+      {/* Media Preview Section */}
+      <div className="max-w-4xl mx-auto w-full mb-0">
+        <MediaPreview attachedMedia={attachedMedia} onRemoveItem={removeMediaItem} />
+      </div>
 
       {/* AI Input Section */}
       <div className="max-w-4xl mx-auto w-full relative">
@@ -568,7 +600,6 @@ export function ChatApp() {
           className={`relative ${isDragOver ? 'ring-2 ring-blue-500 ring-opacity-50' : ''}`}
         >
           <AIInput onSubmit={handleSubmit} className='bg-stone-600/20 border-neutral-600 border-[0.5px]'>
-            <MediaPreview attachedMedia={attachedMedia} onRemoveItem={removeMediaItem} />
             <AIInputTextarea
             onChange={(e) => {
               handleTextChange(e.target.value);
@@ -589,6 +620,39 @@ export function ChatApp() {
               <AIInputButton onClick={selectFolder} title={selectedFolder ? `Current folder: ${selectedFolder}` : 'Select parent folder'}>
                 <FolderIcon className={`size-6 ${selectedFolder ? 'text-blue-400' : ''}`} />
               </AIInputButton>
+              <Popover open={showAppsPopover} onOpenChange={setShowAppsPopover}>
+                <PopoverTrigger asChild>
+                  <AIInputButton title="View open applications">
+                    <IconBrandAppstore className='size-6' />
+                  </AIInputButton>
+                </PopoverTrigger>
+                <PopoverContent className="w-80" align="end">
+                  <div className="space-y-2">
+                    <h4 className="font-medium leading-none">Open Applications</h4>
+                    {appsLoading && filteredApps.length === 0 ? (
+                      <div className="flex items-center gap-2 py-2 text-muted-foreground">
+                        <LoadingDots />
+                        <span className="text-xs">Loading applications...</span>
+                      </div>
+                    ) : filteredApps.length > 0 ? (
+                      <div className="flex flex-wrap gap-2">
+                        {filteredApps.map((app) => (
+                          <Badge key={app.name} variant="secondary" className="text-xs flex items-center gap-1.5">
+                            <img 
+                              src={`data:image/png;base64,${app.icon_png_base64}`} 
+                              alt={`${app.name} icon`}
+                              className="size-4 rounded-sm"
+                            />
+                            {app.name}
+                          </Badge>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">No supported applications are currently open.</p>
+                    )}
+                  </div>
+                </PopoverContent>
+              </Popover>
             </AIInputTools>
             <AIInputSubmit 
               disabled={isSubmitDisabled}
@@ -639,5 +703,6 @@ export function ChatApp() {
         )}
       </div>
     </div>
+    </TooltipProvider>
   );
 };

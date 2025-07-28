@@ -4,7 +4,7 @@ import { convertFileSrc } from '@tauri-apps/api/core';
 
 export type MediaItem = {
   path: string;
-  type: 'image' | 'video';
+  type: 'image' | 'video' | 'audio';
   name: string;
   preview: string;
 };
@@ -24,6 +24,12 @@ export const useMediaHandler = () => {
     const videoExtensions = ['mp4', 'mov', 'avi', 'mkv', 'webm', 'wmv'];
     const extension = fileName.split('.').pop()?.toLowerCase();
     return videoExtensions.includes(extension || '');
+  };
+
+  const isAudioFile = (fileName: string) => {
+    const audioExtensions = ['mp3', 'wav', 'ogg', 'm4a', 'aac', 'flac', 'wma'];
+    const extension = fileName.split('.').pop()?.toLowerCase();
+    return audioExtensions.includes(extension || '');
   };
 
   const handleMediaAttachment = useCallback(async (filePaths: string[]) => {
@@ -53,6 +59,15 @@ export const useMediaHandler = () => {
             name: fileName,
             preview: previewUrl
           });
+        } else if (isAudioFile(fileName)) {
+          const previewUrl = convertFileSrc(path);
+          
+          validMedia.push({
+            path,
+            type: 'audio',
+            name: fileName,
+            preview: previewUrl
+          });
         } else {
           console.warn(`Unsupported file type: ${fileName}`);
         }
@@ -79,7 +94,7 @@ export const useMediaHandler = () => {
         multiple: true,
         filters: [{
           name: 'Media',
-          extensions: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'mp4', 'mov', 'avi', 'mkv', 'webm', 'wmv']
+          extensions: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'mp4', 'mov', 'avi', 'mkv', 'webm', 'wmv', 'mp3', 'wav', 'ogg', 'm4a', 'aac', 'flac', 'wma']
         }]
       });
       
