@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { convertFileSrc } from '@tauri-apps/api/core';
+import { readDir } from '@tauri-apps/plugin-fs';
 
 export type MediaItem = {
   path: string;
@@ -8,13 +9,18 @@ export type MediaItem = {
   preview?: string;
   isDirectory?: boolean;
   extension?: string;
+  mediaCount?: {
+    images: number;
+    videos: number;
+    audios: number;
+  };
 };
 
 interface MediaState {
   files: MediaItem[];
   referenceMap: Map<string, string>;
   addFile: (filePath: string) => void;
-  addFolder: (folderPath: string) => void;
+  addFolder: (folderPath: string) => Promise<void>;
   removeFile: (index: number) => void;
   clearFiles: () => void;
   syncWithText: (text: string) => void;
@@ -89,6 +95,29 @@ export const getParentPath = (path: string): string | null => {
   return parts.length > 0 ? parts.join('/') : null;
 };
 
+const countMediaFilesInFolder = async (folderPath: string): Promise<{ images: number; videos: number; audios: number }> => {
+  try {
+    const entries = await readDir(folderPath);
+    let images = 0, videos = 0, audios = 0;
+    
+    for (const entry of entries) {
+      if (entry.isFile) {
+        const extension = entry.name.split('.').pop()?.toLowerCase();
+        if (extension) {
+          if (IMAGE_EXTENSIONS.includes(extension)) images++;
+          else if (VIDEO_EXTENSIONS.includes(extension)) videos++;
+          else if (AUDIO_EXTENSIONS.includes(extension)) audios++;
+        }
+      }
+    }
+    
+    return { images, videos, audios };
+  } catch (error) {
+    console.warn('Failed to count media files in folder:', folderPath, error);
+    return { images: 0, videos: 0, audios: 0 };
+  }
+};
+
 export const useMediaStore = create<MediaState>((set, get) => ({
   files: [],
   referenceMap: new Map(),
@@ -126,7 +155,7 @@ export const useMediaStore = create<MediaState>((set, get) => ({
     });
   },
 
-  addFolder: (folderPath: string) => {
+  addFolder: async (folderPath: string) => {
     const folderName = folderPath.split('/').pop() || folderPath;
     const state = get();
     
@@ -135,10 +164,13 @@ export const useMediaStore = create<MediaState>((set, get) => ({
       return;
     }
 
+    const mediaCount = await countMediaFilesInFolder(folderPath);
+
     const mediaItem: MediaItem = {
       path: folderPath,
       type: 'folder',
       name: folderName,
+      mediaCount,
     };
 
     set(state => {

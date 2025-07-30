@@ -394,7 +394,7 @@ export function ChatApp() {
       {/* AI Input Section */}
       <div className="max-w-4xl mx-auto w-full relative">
         <div className="relative">
-          <AIInput onSubmit={handleSubmit} className='bg-stone-600/20 border-neutral-600 border-[0.5px]'>
+          <AIInput onSubmit={handleSubmit} className='border-neutral-600 border-[0.5px]'>
             <AIInputTextarea
             onChange={(e) => {
               handleTextChange(e.target.value);

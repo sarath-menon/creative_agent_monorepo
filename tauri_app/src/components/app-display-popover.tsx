@@ -90,7 +90,7 @@ export function AppDisplayPopover({ isOpen, onOpenChange }: AppDisplayPopoverPro
           <IconBrandAppstore className='size-6' />
         </AIInputButton>
       </PopoverTrigger>
-      <PopoverContent className="w-80 p-0 shadow-xl border border-gray-200/50 dark:border-gray-700/50 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm" align="end">
+      <PopoverContent className="w-80 p-0 shadow-xl border border-gray-200/50 dark:border-gray-700/50  backdrop-blur-sm" align="end">
         <div className="p-6 space-y-6">
             <div className="space-y-3">
               {permissions.map((permission, index) => (
@@ -101,7 +101,7 @@ export function AppDisplayPopover({ isOpen, onOpenChange }: AppDisplayPopoverPro
           {/* Open Applications Section */}
           <div className="space-y-4 ">
             {appsLoading && filteredApps.length === 0 ? (
-              <div className="flex items-center gap-3 p-4 rounded-lg bg-gray-50/50 dark:bg-gray-800/30">
+              <div className="flex items-center gap-3 p-4 rounded-lg ">
                 <LoadingDots />
                 <span className="text-sm text-gray-600 dark:text-gray-400">Loading applications...</span>
               </div>
@@ -131,7 +131,7 @@ export function AppDisplayPopover({ isOpen, onOpenChange }: AppDisplayPopoverPro
                 ))}
               </div>
             ) : (
-              <div className="p-4 rounded-lg bg-gray-50/50 dark:bg-gray-800/30 text-center">
+              <div className="p-4 rounded-lg text-center">
                 <p className="text-sm text-gray-600 dark:text-gray-400">No supported applications are currently open.</p>
                 <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">Supported: Notes, Obsidian, Blender, Pixelmator Pro</p>
               </div>

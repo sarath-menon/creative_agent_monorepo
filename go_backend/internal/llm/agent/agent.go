@@ -324,13 +324,6 @@ func (a *agent) processGeneration(ctx context.Context, sessionID, content string
 			}
 			return a.err(fmt.Errorf("failed to process events: %w", err))
 		}
-		if cfg.Debug {
-			seqId := (len(msgHistory) + 1) / 2
-			// Tool results logging removed for embedded binary
-			logging.Info("Result", "message", agentMessage.FinishReason(), "toolResults", "{}", "seqId", seqId)
-		} else {
-			logging.Info("Result", "message", agentMessage.FinishReason(), "toolResults", toolResults)
-		}
 
 		// Enhanced tool results logging for debugging
 		if toolResults != nil {
@@ -340,12 +333,11 @@ func (a *agent) processGeneration(ctx context.Context, sessionID, content string
 		}
 		if (agentMessage.FinishReason() == message.FinishReasonToolUse) && toolResults != nil {
 			// We are not done, we need to respond with the tool response
-			logging.Info("[Agent] Tool use detected, continuing conversation loop for session", "sessionID", sessionID)
 			msgHistory = append(msgHistory, agentMessage, *toolResults)
 			continue
 		}
 		// Publish final completion event
-		logging.Info("[Agent] Message processing completed for session", "sessionID", sessionID, "finalMessageLength", len(agentMessage.Content().String()), "finishReason", agentMessage.FinishReason())
+
 		finalEvent := AgentEvent{
 			Type:      AgentEventTypeResponse,
 			Message:   agentMessage,
@@ -396,7 +388,7 @@ func (a *agent) streamAndHandleEvents(ctx context.Context, sessionID string, msg
 
 	toolResults := make([]message.ToolResult, len(assistantMsg.ToolCalls()))
 	toolCalls := assistantMsg.ToolCalls()
-	logging.Info("[Agent] Executing tool calls for session", "toolCallCount", len(toolCalls), "sessionID", sessionID)
+
 	for i, toolCall := range toolCalls {
 		select {
 		case <-ctx.Done():
@@ -429,7 +421,6 @@ func (a *agent) streamAndHandleEvents(ctx context.Context, sessionID string, msg
 				}
 				continue
 			}
-			logging.Info("[Agent Tool] Executing tool for session", "toolName", toolCall.Name, "sessionID", sessionID, "inputSize", len(toolCall.Input))
 			logging.Info("[Agent] Executing tool", "toolName", toolCall.Name, "sessionID", sessionID, "toolCallID", toolCall.ID, "inputSize", len(toolCall.Input), "inputContent", toolCall.Input)
 
 			toolStartTime := time.Now()
@@ -467,7 +458,6 @@ func (a *agent) streamAndHandleEvents(ctx context.Context, sessionID string, msg
 			// Log tool execution result
 			isError := toolErr != nil
 			resultLength := len(toolResult.Content)
-			logging.Info("[Agent Tool] Tool completed for session", "toolName", toolCall.Name, "sessionID", sessionID, "duration", toolDuration, "resultLength", resultLength, "error", isError)
 
 			toolResults[i] = message.ToolResult{
 				ToolCallID: toolCall.ID,
@@ -518,7 +508,7 @@ func (a *agent) processEvent(ctx context.Context, sessionID string, assistantMsg
 
 	switch event.Type {
 	case provider.EventThinkingDelta:
-		// logging.Info("[Agent Event] Thinking delta received for session %s. Length: %d\n", sessionID, len(event.Content))
+
 		assistantMsg.AppendReasoningContent(event.Content)
 		// Publish thinking event for real-time streaming
 		a.Publish(pubsub.CreatedEvent, AgentEvent{

@@ -1,8 +1,5 @@
 # Claude Code Integration
 
-This project uses `.recreate/commands/` for custom slash commands (independent from Claude Code's `.claude/commands/` system).
-Users can add `.md` files to `.recreate/commands/` or `~/.recreate/commands/` to create custom commands.
-
 ## Development Commands
 
 ```bash
@@ -34,3 +31,9 @@ make tail-log     # Reads the current log file (last 100 lines of code)
 2. NEVER mock LLM API calls
 3. DO NOT use preserve backward compatibility unless the user specifically requests it
 4. Do not handle errors (eg. API failures) gracefully, raise exceptions immediately.
+
+
+## Notes
+
+This project uses `.recreate/commands/` for custom slash commands (independent from Claude Code's `.claude/commands/` system).
+Users can add `.md` files to `.recreate/commands/` or `~/.recreate/commands/` to create custom commands.

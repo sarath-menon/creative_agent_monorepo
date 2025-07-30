@@ -124,7 +124,24 @@ export const MediaPreview = ({ attachedMedia, onRemoveItem }: MediaPreviewProps)
                   </div>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>{media.name}</p>
+                  <p>
+                    {media.type === 'folder' && media.mediaCount ? (
+                      (() => {
+                        const { images, videos, audios } = media.mediaCount;
+                        const total = images + videos + audios;
+                        if (total === 0) {
+                          return `${media.name} - no media files`;
+                        }
+                        const parts = [];
+                        if (images > 0) parts.push(`${images}i`);
+                        if (videos > 0) parts.push(`${videos}v`);
+                        if (audios > 0) parts.push(`${audios}a`);
+                        return `${media.name} ${parts.join('/')}`;
+                      })()
+                    ) : (
+                      media.name
+                    )}
+                  </p>
                 </TooltipContent>
               </Tooltip>
             <button
