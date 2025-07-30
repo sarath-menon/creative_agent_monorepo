@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { rpcCall } from '@/lib/rpc';
 
 interface CreateSessionParams {
   title: string;
@@ -9,24 +10,8 @@ interface Session {
 }
 
 const createSession = async (params: CreateSessionParams): Promise<Session> => {
-  const response = await fetch('http://localhost:8088/rpc', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      method: 'sessions.create',
-      params,
-      id: 1
-    })
-  });
-
-  if (!response.ok) {
-    throw new Error(`HTTP error! status: ${response.status}`);
-  }
-
-  const data = await response.json();
-  const sessionId = data.result?.id || data.result;
+  const result = await rpcCall<any>('sessions.create', params);
+  const sessionId = result?.id || result;
 
   if (!sessionId) {
     throw new Error('No session ID returned from server');

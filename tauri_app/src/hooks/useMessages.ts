@@ -1,4 +1,5 @@
 import { useMutation } from '@tanstack/react-query';
+import { rpcCall } from '@/lib/rpc';
 
 interface SendMessageParams {
   content: string;
@@ -10,25 +11,8 @@ interface MessageResponse {
 }
 
 const sendMessage = async (params: SendMessageParams): Promise<MessageResponse> => {
-  const response = await fetch('http://localhost:8088/rpc', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      method: 'messages.send',
-      params,
-      id: 1
-    })
-  });
-
-  if (!response.ok) {
-    throw new Error(`HTTP error! status: ${response.status}`);
-  }
-
-  const data = await response.json();
-  const assistantResponse = data.result?.response || 'No response from server';
-
+  const result = await rpcCall<any>('messages.send', params);
+  const assistantResponse = result?.response || 'No response from server';
   return { response: assistantResponse };
 };
 

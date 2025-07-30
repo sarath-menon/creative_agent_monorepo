@@ -1,5 +1,6 @@
 import { useCallback, useMemo } from 'react';
 import { useInfiniteQuery } from '@tanstack/react-query';
+import { rpcCall } from '@/lib/rpc';
 
 interface MessageHistoryItem {
   id: string;
@@ -24,25 +25,9 @@ interface UseMessageHistoryReturn {
 }
 
 const fetchMessages = async (method: string, params: any): Promise<MessageHistoryItem[]> => {
-  const response = await fetch('http://localhost:8088/rpc', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      method,
-      params,
-      id: 1,
-    }),
-  });
-
-  const data = await response.json();
+  const result = await rpcCall<any[]>(method, params);
   
-  if (data.error) {
-    throw new Error(data.error.message);
-  }
-
-  return (data.result || []).map((msg: any) => ({
+  return (result || []).map((msg: any) => ({
     id: msg.id,
     role: msg.role,
     content: JSON.parse(msg.content).text,
