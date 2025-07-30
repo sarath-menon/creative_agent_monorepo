@@ -126,7 +126,7 @@ export const AttachmentPreview = ({ attachments, onRemoveItem }: AttachmentPrevi
   }
 
   return (
-    <div className="flex flex-wrap gap-2 p-2 bg-gray-50 dark:bg-gray-800/30 rounded-lg border border-gray-200 dark:border-gray-700">
+    <div className="flex flex-wrap gap-2 p-2 bg-gray-50 dark:bg-gray-800/30 rounded-lg">
       {attachments.map((attachment, index) => (
         <div key={attachment.id} className="relative group flex-shrink-0">
           {attachment.type === 'app' ? (

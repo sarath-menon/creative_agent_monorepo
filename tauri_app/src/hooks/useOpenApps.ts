@@ -6,7 +6,7 @@ export interface OpenApp {
   icon_png_base64: string;
 }
 
-const fetchVisibleApps = async (): Promise<OpenApp[]> => {
+export const fetchVisibleApps = async (): Promise<OpenApp[]> => {
   try {
     const apps = await invoke<OpenApp[]>('list_apps_with_icons');
     return apps;

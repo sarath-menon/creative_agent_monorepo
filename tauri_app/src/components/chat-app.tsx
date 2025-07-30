@@ -31,6 +31,7 @@ import { useSession, useCreateSession } from '@/hooks/useSession';
 import { useSendMessage } from '@/hooks/useMessages';
 import { usePersistentSSE } from '@/hooks/usePersistentSSE';
 import { type FileEntry } from '@/hooks/useFileSystem';
+import { useOpenApps } from '@/hooks/useOpenApps';
 import { useFileReference } from '@/hooks/useFileReference';
 import { CommandFileReference } from './command-file-reference';
 import { useAttachmentStore, type Attachment, expandFileReferences, removeFileReferences, createFileAttachment, createFolderAttachment } from '@/stores/attachmentStore';
@@ -43,6 +44,7 @@ import { SlashCommandDropdown, shouldShowSlashCommands, handleSlashCommandNaviga
 import { ResponseRenderer } from './response-renderer';
 import { MessageAttachmentDisplay } from './message-attachment-display';
 import { SessionHeader } from './session-header';
+import { PermissionsPopover } from './app-display-popover';
 
 
 type ToolCall = {
@@ -67,7 +69,7 @@ export function ChatApp() {
   const [showSlashCommands, setShowSlashCommands] = useState(false);
   const [selectedCommandIndex, setSelectedCommandIndex] = useState(0);
   const [inputElement, setInputElement] = useState<HTMLTextAreaElement | null>(null);
-  const [shouldFocusInput, setShouldFocusInput] = useState<number>(0);
+  const [permissionsPopoverOpen, setPermissionsPopoverOpen] = useState(false);
   const interruptedMessageAddedRef = useRef(false);
 
 
@@ -78,14 +80,27 @@ export function ChatApp() {
   const sseStream = usePersistentSSE(session?.id || '');
   const attachments = useAttachmentStore(state => state.attachments);
   const referenceMap = useAttachmentStore(state => state.referenceMap);
-  const availableApps = useAttachmentStore(state => state.availableApps);
+  const { apps: openApps } = useOpenApps();
+  
+  // Transform open apps to Attachment format and filter allowed apps
+  const allowedApps = ['Notes', 'Obsidian', 'Blender', 'Pixelmator Pro', 'Final Cut Pro'];
+  const availableApps = useMemo(() => {
+    return openApps
+      .filter(app => allowedApps.some(allowed => app.name.toLowerCase().includes(allowed.toLowerCase())))
+      .map(app => ({
+        id: `app:${app.name}`,
+        name: app.name,
+        type: 'app' as const,
+        icon: app.icon_png_base64,
+        isOpen: true
+      }));
+  }, [openApps]);
   const addAttachment = useAttachmentStore(state => state.addAttachment);
   const removeAttachment = useAttachmentStore(state => state.removeAttachment);
   const clearAttachments = useAttachmentStore(state => state.clearAttachments);
   const addReference = useAttachmentStore(state => state.addReference);
   const removeReference = useAttachmentStore(state => state.removeReference);
   const syncWithText = useAttachmentStore(state => state.syncWithText);
-  const updateAvailableApps = useAttachmentStore(state => state.updateAvailableApps);
   const getMediaFiles = useAttachmentStore(state => state.getMediaFiles);
   const { selectedFolder, selectFolder } = useFolderSelection();
 
@@ -118,29 +133,15 @@ export function ChatApp() {
     addReference(displayReference, `app:${app.name}`);
     setText(newText);
     
-    // Trigger delayed focus to avoid race condition with dropdown closing
-    setShouldFocusInput(prev => prev + 1);
+    // Focus input and set cursor to end (same as file selection)
+    if (inputElement) {
+      inputElement.focus();
+      const textLength = newText.length;
+      inputElement.setSelectionRange(textLength, textLength);
+    }
   };
 
-  // Update apps when file reference opens
-  useEffect(() => {
-    if (fileRef.show) {
-      updateAvailableApps();
-    }
-  }, [fileRef.show, updateAvailableApps]);
 
-  // Handle delayed focus after app selection
-  useEffect(() => {
-    if (shouldFocusInput > 0 && inputElement) {
-      const timeoutId = setTimeout(() => {
-        inputElement.focus();
-        const textLength = text.length;
-        inputElement.setSelectionRange(textLength, textLength);
-      }, 0);
-      
-      return () => clearTimeout(timeoutId);
-    }
-  }, [shouldFocusInput, inputElement, text]);
   
   // Initialize new hooks
   const historyNavigation = useMessageHistoryNavigation({
@@ -455,6 +456,7 @@ export function ChatApp() {
               <AIInputButton onClick={handleFolderSelect} title={selectedFolder ? `Current folder: ${selectedFolder}` : 'Select parent folder'}>
                 <FolderIcon className={`size-6 ${selectedFolder ? 'text-blue-400' : ''}`} />
               </AIInputButton>
+              <PermissionsPopover isOpen={permissionsPopoverOpen} onOpenChange={setPermissionsPopoverOpen} />
             </AIInputTools>
             <AIInputSubmit 
               disabled={isSubmitDisabled}

@@ -1,6 +1,7 @@
 import { useReducer, useEffect, useRef } from 'react';
 import { useFileSystem, type MediaItem } from './useFileSystem';
 import { useAttachmentStore, getParentPath } from '@/stores/attachmentStore';
+import { ALL_MEDIA_EXTENSIONS } from '@/utils/fileTypes';
 
 type State = {
   selected: number;
@@ -83,7 +84,7 @@ export const useFileReference = (text: string, setText: (text: string) => void, 
   const baseFiles = state.currentFolder ? state.folderContents : currentFiles;
   const files = baseFiles.filter(f => 
     f.isDirectory || 
-    (f.extension && ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'mp4', 'mov', 'avi', 'mkv', 'webm', 'wmv', 'mp3', 'wav', 'ogg', 'm4a', 'aac', 'flac', 'wma'].includes(f.extension))
+    (f.extension && ALL_MEDIA_EXTENSIONS.includes(f.extension as any))
   );
   
   const words = text.split(' ');

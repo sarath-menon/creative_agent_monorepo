@@ -3,6 +3,7 @@ import { FolderIcon, ImageIcon, VideoIcon, AudioLines, Play } from 'lucide-react
 import { type FileEntry } from '@/hooks/useFileSystem';
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { type Attachment } from '@/stores/attachmentStore';
+import { getFileType } from '@/utils/fileTypes';
 import {
   Command,
   CommandEmpty,
@@ -24,22 +25,6 @@ interface Props {
   onClose?: () => void;
 }
 
-// Simple media type detection
-const getFileType = (fileName: string): 'image' | 'video' | 'audio' | null => {
-  const extension = fileName.split('.').pop()?.toLowerCase() || '';
-  
-  if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'].includes(extension)) {
-    return 'image';
-  }
-  if (['mp4', 'mov', 'avi', 'mkv', 'webm', 'wmv'].includes(extension)) {
-    return 'video';
-  }
-  if (['mp3', 'wav', 'ogg', 'm4a', 'aac', 'flac', 'wma'].includes(extension)) {
-    return 'audio';
-  }
-  
-  return null;
-};
 
 // Media thumbnail component
 const MediaThumbnail = ({ file }: { file: FileEntry }) => {
@@ -133,15 +118,6 @@ export function CommandFileReference({
       )
     : apps;
   
-  
-  // Auto-select first item when filtered results change
-  useEffect(() => {
-    if (filteredFiles.length > 0) {
-      setSelectedValue(`file:${filteredFiles[0].name}`);
-    } else if (filteredApps.length > 0) {
-      setSelectedValue(`app:${filteredApps[0].name}`);
-    }
-  }, [filteredFiles, filteredApps]);
   
   const handleSelect = (value: string) => {
     // Clear search query and selected value to prevent state interference

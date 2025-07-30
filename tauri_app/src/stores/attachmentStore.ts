@@ -1,6 +1,7 @@
 import { create } from 'zustand';
-import { convertFileSrc, invoke } from '@tauri-apps/api/core';
+import { convertFileSrc } from '@tauri-apps/api/core';
 import { readDir } from '@tauri-apps/plugin-fs';
+import { IMAGE_EXTENSIONS, VIDEO_EXTENSIONS, AUDIO_EXTENSIONS, ALL_MEDIA_EXTENSIONS, getFileType, isMediaFile } from '@/utils/fileTypes';
 
 export type Attachment = {
   id: string;
@@ -24,50 +25,17 @@ export type Attachment = {
 interface AttachmentState {
   attachments: Attachment[];
   referenceMap: Map<string, string>;
-  availableApps: Attachment[];
   addAttachment: (attachment: Attachment) => void;
   removeAttachment: (index: number) => void;
   clearAttachments: () => void;
   addReference: (displayName: string, path: string) => void;
   removeReference: (displayName: string) => void;
   syncWithText: (text: string) => void;
-  updateAvailableApps: () => Promise<void>;
   getMediaFiles: () => Attachment[];
 }
 
-const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'];
-const VIDEO_EXTENSIONS = ['mp4', 'mov', 'avi', 'mkv', 'webm', 'wmv'];
-const AUDIO_EXTENSIONS = ['mp3', 'wav', 'ogg', 'm4a', 'aac', 'flac', 'wma'];
-const MEDIA_EXTENSIONS = [...IMAGE_EXTENSIONS, ...VIDEO_EXTENSIONS, ...AUDIO_EXTENSIONS];
-const ALLOWED_APPS = ['Notes', 'Obsidian', 'Blender', 'Pixelmator Pro', 'Final Cut Pro'];
 
-const getFileType = (fileName: string): 'image' | 'video' | 'audio' | null => {
-  const extension = fileName.split('.').pop()?.toLowerCase() || '';
-  
-  if (IMAGE_EXTENSIONS.includes(extension)) return 'image';
-  if (VIDEO_EXTENSIONS.includes(extension)) return 'video';
-  if (AUDIO_EXTENSIONS.includes(extension)) return 'audio';
-  
-  return null;
-};
 
-const fetchApps = async (): Promise<Attachment[]> => {
-  try {
-    const openApps = await invoke<{name: string; icon_png_base64: string}[]>('list_apps_with_icons');
-    return openApps
-      .filter(app => ALLOWED_APPS.some(allowed => app.name.toLowerCase().includes(allowed.toLowerCase())))
-      .map(app => ({
-        id: `app:${app.name}`,
-        name: app.name,
-        type: 'app' as const,
-        icon: app.icon_png_base64,
-        isOpen: true
-      }));
-  } catch (error) {
-    console.warn('Failed to fetch apps:', error);
-    return [];
-  }
-};
 
 const countMediaFilesInFolder = async (folderPath: string): Promise<{ images: number; videos: number; audios: number }> => {
   try {
@@ -95,7 +63,6 @@ const countMediaFilesInFolder = async (folderPath: string): Promise<{ images: nu
 export const useAttachmentStore = create<AttachmentState>((set, get) => ({
   attachments: [],
   referenceMap: new Map(),
-  availableApps: [],
 
   addAttachment: (attachment: Attachment) => {
     const state = get();
@@ -154,16 +121,12 @@ export const useAttachmentStore = create<AttachmentState>((set, get) => ({
     }
   },
 
-  updateAvailableApps: async () => {
-    const apps = await fetchApps();
-    set({ availableApps: apps });
-  },
 
   getMediaFiles: () => {
     const state = get();
     return state.attachments.filter(attachment => 
       attachment.type === 'folder' || 
-      (attachment.extension && MEDIA_EXTENSIONS.includes(attachment.extension))
+      (attachment.extension && ALL_MEDIA_EXTENSIONS.includes(attachment.extension as any))
     );
   }
 }));
@@ -202,14 +165,10 @@ export const createFolderAttachment = async (folderPath: string): Promise<Attach
   };
 };
 
-export const isMediaFile = (filename: string): boolean => {
-  const ext = filename.split('.').pop()?.toLowerCase();
-  return ext ? MEDIA_EXTENSIONS.includes(ext) : false;
-};
 
 export const isImageFile = (filename: string): boolean => {
   const ext = filename.split('.').pop()?.toLowerCase();
-  return ext ? IMAGE_EXTENSIONS.includes(ext) : false;
+  return ext ? IMAGE_EXTENSIONS.includes(ext as any) : false;
 };
 
 export const filterAndSortEntries = (entries: any[], basePath = ''): Attachment[] => {
@@ -218,7 +177,7 @@ export const filterAndSortEntries = (entries: any[], basePath = ''): Attachment[
       if (entry.name.startsWith('.')) return false;
       if (entry.isDirectory) return true;
       const extension = entry.name.split('.').pop()?.toLowerCase();
-      return extension && MEDIA_EXTENSIONS.includes(extension);
+      return extension && ALL_MEDIA_EXTENSIONS.includes(extension as any);
     })
     .map(entry => {
       const path = basePath ? `${basePath}/${entry.name}` : entry.name;
