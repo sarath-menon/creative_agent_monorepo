@@ -1,6 +1,6 @@
 import { useReducer, useEffect, useRef } from 'react';
 import { useFileSystem, type MediaItem } from './useFileSystem';
-import { useMediaStore, getMediaFiles, getParentPath } from '@/stores/mediaStore';
+import { useAttachmentStore, getParentPath } from '@/stores/attachmentStore';
 
 type State = {
   selected: number;
@@ -57,9 +57,8 @@ export const useFileReference = (text: string, setText: (text: string) => void, 
   const { currentFiles, fetchFiles, fetchDirectoryContents } = useFileSystem(customBasePath);
   const loadingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
-  const addFile = useMediaStore(state => state.addFile);
-  const addFolder = useMediaStore(state => state.addFolder);
-  const addReference = useMediaStore(state => state.addReference);
+  const addAttachment = useAttachmentStore(state => state.addAttachment);
+  const addReference = useAttachmentStore(state => state.addReference);
   
   const startDebouncedLoading = () => {
     // Clear any existing timeout
@@ -82,9 +81,13 @@ export const useFileReference = (text: string, setText: (text: string) => void, 
   };
   
   const baseFiles = state.currentFolder ? state.folderContents : currentFiles;
-  const files = getMediaFiles(baseFiles);
+  const files = baseFiles.filter(f => 
+    f.isDirectory || 
+    (f.extension && ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'mp4', 'mov', 'avi', 'mkv', 'webm', 'wmv', 'mp3', 'wav', 'ogg', 'm4a', 'aac', 'flac', 'wma'].includes(f.extension))
+  );
   
-  const lastWord = text.trim().split(/\s+/).pop() || '';
+  const words = text.split(' ');
+  const lastWord = words[words.length - 1];
   const show = lastWord.startsWith('@') && !lastWord.includes('/');
   
   useEffect(() => {
@@ -130,11 +133,17 @@ export const useFileReference = (text: string, setText: (text: string) => void, 
     words[words.length - 1] = `${displayReference} `;
     const newText = words.join(' ');
     
-    // Add file or folder to media store based on type
+    // Add file or folder to attachment store based on type
     if (file.isDirectory) {
-      addFolder(file.path);
+      const { createFolderAttachment } = await import('@/stores/attachmentStore');
+      const folderAttachment = await createFolderAttachment(file.path);
+      addAttachment(folderAttachment);
     } else {
-      addFile(file.path);
+      const { createFileAttachment } = await import('@/stores/attachmentStore');
+      const fileAttachment = createFileAttachment(file.path);
+      if (fileAttachment) {
+        addAttachment(fileAttachment);
+      }
     }
     addReference(displayReference, file.path);
     setText(newText);
@@ -160,6 +169,10 @@ export const useFileReference = (text: string, setText: (text: string) => void, 
       const textLength = newText.length;
       inputElement.setSelectionRange(textLength, textLength);
     }
+  };
+
+  const closeDropdown = () => {
+    dispatch({ type: 'RESET_STATE' });
   };
 
   const enterFolder = async (folder: MediaItem) => {
@@ -223,6 +236,7 @@ export const useFileReference = (text: string, setText: (text: string) => void, 
     isLoadingFolder: state.isLoadingFolder,
     goBack,
     enterSelectedFolder,
-    close: handleEscape
+    close: handleEscape,
+    closeDropdown
   };
 };

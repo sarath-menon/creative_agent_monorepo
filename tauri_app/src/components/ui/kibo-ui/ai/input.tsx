@@ -90,6 +90,7 @@ export type AIInputTextareaProps = ComponentProps<typeof Textarea> & {
   minHeight?: number;
   maxHeight?: number;
   availableFiles?: string[];
+  availableApps?: string[];
   availableCommands?: string[];
 };
 
@@ -102,6 +103,7 @@ export const AIInputTextarea = ({
   maxHeight = 164,
   value = '',
   availableFiles = [],
+  availableApps = [],
   availableCommands = [],
   ...props
 }: AIInputTextareaProps) => {
@@ -113,7 +115,7 @@ export const AIInputTextarea = ({
   const overlayRef = useRef<HTMLDivElement>(null);
   const previousValueRef = useRef<string>(value || '');
   
-  const parser = useMemo(() => new TextParser(availableFiles, availableCommands), [availableFiles, availableCommands]);
+  const parser = useMemo(() => new TextParser(availableFiles, availableCommands, availableApps), [availableFiles, availableCommands, availableApps]);
   const tokens = useMemo(() => parser.parse(value || ''), [parser, value]);
   
   // Update ref when value changes from outside
