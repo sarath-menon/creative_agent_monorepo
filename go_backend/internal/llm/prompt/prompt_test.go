@@ -6,9 +6,10 @@ import (
 	"path/filepath"
 	"testing"
 
+	"mix/internal/config"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go_general_agent/internal/config"
 )
 
 func TestGetContextFromPaths(t *testing.T) {

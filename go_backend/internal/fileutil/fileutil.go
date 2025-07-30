@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"go_general_agent/internal/logging"
+	"mix/internal/logging"
 
 	"github.com/bmatcuk/doublestar/v4"
 	"mvdan.cc/sh/v3/syntax"
@@ -166,5 +166,6 @@ func GlobWithDoublestar(pattern, searchPath string, limit int) ([]string, bool, 
 
 // QuotePath properly quotes a file path for safe use in shell commands
 func QuotePath(path string) string {
-	return syntax.Quote(path, syntax.LangBash)
+	quoted, _ := syntax.Quote(path, syntax.LangBash)
+	return quoted
 }

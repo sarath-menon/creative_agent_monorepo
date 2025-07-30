@@ -5,10 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"go_general_agent/internal/config"
-	"go_general_agent/internal/llm/tools"
-	"go_general_agent/internal/message"
-	"go_general_agent/internal/session"
+	"mix/internal/config"
+	"mix/internal/llm/tools"
+	"mix/internal/message"
+	"mix/internal/session"
 )
 
 type agentTool struct {

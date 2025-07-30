@@ -9,14 +9,15 @@ import (
 	"strings"
 	"time"
 
+	"mix/internal/config"
+	"mix/internal/llm/models"
+	toolsPkg "mix/internal/llm/tools"
+	"mix/internal/logging"
+	"mix/internal/message"
+
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/bedrock"
 	"github.com/anthropics/anthropic-sdk-go/option"
-	"go_general_agent/internal/config"
-	"go_general_agent/internal/llm/models"
-	toolsPkg "go_general_agent/internal/llm/tools"
-	"go_general_agent/internal/logging"
-	"go_general_agent/internal/message"
 )
 
 type anthropicOptions struct {
@@ -79,13 +80,13 @@ func newAnthropicClient(opts providerClientOptions) AnthropicClient {
 	}
 
 	anthropicClientOptions := []option.RequestOption{}
-	
+
 	// Set up OAuth if available using SDK's WithAuthToken
 	if oauthCreds != nil {
 		anthropicOpts.useOAuth = true
 		anthropicOpts.oauthCreds = oauthCreds
 		// Use WithAuthToken for OAuth (sets Authorization: Bearer header)
-		anthropicClientOptions = append(anthropicClientOptions, 
+		anthropicClientOptions = append(anthropicClientOptions,
 			option.WithAuthToken(oauthCreds.AccessToken),
 			option.WithHeader("anthropic-beta", "oauth-2025-04-20"),
 		)
@@ -236,21 +237,21 @@ func (a *anthropicClient) preparedMessages(messages []anthropic.MessageParam, to
 	if a.options.useOAuth {
 		// REQUIRED: Use Claude Code system prompt for OAuth
 		systemMessage = "You are Claude Code, Anthropic's official CLI for Claude."
-		
+
 		// If the original system message was different, inject it as role context
 		// This implements the role injection pattern from the reference manual
 		if a.providerOptions.systemMessage != systemMessage && a.providerOptions.systemMessage != "" {
 			roleInjectionMsg := fmt.Sprintf("For this conversation, please act as: %s", a.providerOptions.systemMessage)
-			
+
 			// Inject role at the beginning of the conversation if not already present
 			if len(messages) == 0 || !strings.Contains(messages[0].Content[0].OfText.Text, "For this conversation, please act as:") {
 				roleContent := anthropic.NewTextBlock(roleInjectionMsg)
 				roleMessage := anthropic.NewUserMessage(roleContent)
-				
+
 				// Add acknowledgment message
 				ackContent := anthropic.NewTextBlock("Understood. I'll act in that role for our conversation.")
 				ackMessage := anthropic.NewAssistantMessage(ackContent)
-				
+
 				// Prepend role injection messages
 				messages = append([]anthropic.MessageParam{roleMessage, ackMessage}, messages...)
 			}
@@ -291,7 +292,7 @@ func (a *anthropicClient) send(ctx context.Context, messages []message.Message, 
 					)
 				}
 				a.options.oauthCreds = refreshedCreds
-				
+
 				// Update client with new token
 				a.client = anthropic.NewClient(
 					option.WithAuthToken(refreshedCreds.AccessToken),
@@ -320,7 +321,7 @@ func (a *anthropicClient) send(ctx context.Context, messages []message.Message, 
 		// If there is an error we are going to see if we can retry the call
 		if err != nil {
 			logging.Error("Error in Anthropic API call", "error", err)
-			
+
 			// Check for 401 and try OAuth token refresh
 			if a.options.useOAuth && a.options.oauthCreds != nil && strings.Contains(err.Error(), "401") && a.options.oauthCreds.RefreshToken != "" {
 				if refreshedCreds, refreshErr := RefreshAccessToken(a.options.oauthCreds); refreshErr == nil {
@@ -335,7 +336,7 @@ func (a *anthropicClient) send(ctx context.Context, messages []message.Message, 
 						)
 					}
 					a.options.oauthCreds = refreshedCreds
-					
+
 					// Update client with new token and retry
 					a.client = anthropic.NewClient(
 						option.WithAuthToken(refreshedCreds.AccessToken),
@@ -345,7 +346,7 @@ func (a *anthropicClient) send(ctx context.Context, messages []message.Message, 
 					continue
 				}
 			}
-			
+
 			retry, after, retryErr := a.shouldRetry(attempts, err)
 			if retryErr != nil {
 				return nil, retryErr
@@ -377,11 +378,9 @@ func (a *anthropicClient) send(ctx context.Context, messages []message.Message, 
 	}
 }
 
-
-
 func (a *anthropicClient) stream(ctx context.Context, messages []message.Message, tools []toolsPkg.BaseTool) <-chan ProviderEvent {
 	eventChan := make(chan ProviderEvent)
-	
+
 	// Handle proactive token refresh for OAuth
 	if a.options.useOAuth && a.options.oauthCreds != nil {
 		if a.options.oauthCreds.IsTokenExpired() && a.options.oauthCreds.RefreshToken != "" {
@@ -397,7 +396,7 @@ func (a *anthropicClient) stream(ctx context.Context, messages []message.Message
 					)
 				}
 				a.options.oauthCreds = refreshedCreds
-				
+
 				// Update client with new token
 				a.client = anthropic.NewClient(
 					option.WithAuthToken(refreshedCreds.AccessToken),
@@ -512,7 +511,7 @@ func (a *anthropicClient) stream(ctx context.Context, messages []message.Message
 				close(eventChan)
 				return
 			}
-			
+
 			// Check for 401 and try OAuth token refresh
 			if a.options.useOAuth && a.options.oauthCreds != nil && strings.Contains(err.Error(), "401") && a.options.oauthCreds.RefreshToken != "" {
 				if refreshedCreds, refreshErr := RefreshAccessToken(a.options.oauthCreds); refreshErr == nil {
@@ -527,7 +526,7 @@ func (a *anthropicClient) stream(ctx context.Context, messages []message.Message
 						)
 					}
 					a.options.oauthCreds = refreshedCreds
-					
+
 					// Update client with new token and retry
 					a.client = anthropic.NewClient(
 						option.WithAuthToken(refreshedCreds.AccessToken),
@@ -537,7 +536,7 @@ func (a *anthropicClient) stream(ctx context.Context, messages []message.Message
 					continue
 				}
 			}
-			
+
 			// If there is an error we are going to see if we can retry the call
 			retry, after, retryErr := a.shouldRetry(attempts, err)
 			if retryErr != nil {
@@ -648,5 +647,3 @@ func WithAnthropicShouldThinkFn(fn func(string) bool) AnthropicOption {
 		options.shouldThink = fn
 	}
 }
-
-

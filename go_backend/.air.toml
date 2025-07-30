@@ -4,8 +4,8 @@ tmp_dir = "tmp"
 
 [build]
   args_bin = ["--http-port", "8088", "--dangerously-skip-permissions"]
-  bin = "./build/go_general_agent"
-  cmd = "go build -o ./build/go_general_agent ./main.go "
+  bin = "./build/mix"
+  cmd = "go build -o ./build/mix ./main.go "
   delay = 0
   exclude_dir = ["assets", "tmp", "vendor", "testdata", "build", "rereate_macos_app"]
   exclude_file = []

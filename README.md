@@ -19,9 +19,9 @@ A Go-based general agent with CLI interface and HTTP API endpoints.
 cd go_backend
 make build
 # CLI mode
-./go_general_agent -p "Your prompt here"
+./mix -p "Your prompt here"
 # Or HTTP server mode
-./go_general_agent --http-port 8080
+./mix --http-port 8080
 ```
 
 ### recreate_tauri_app

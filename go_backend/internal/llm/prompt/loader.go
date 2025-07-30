@@ -10,8 +10,8 @@ import (
 	"runtime"
 	"strings"
 
-	"go_general_agent/internal/config"
-	"go_general_agent/internal/llm/tools"
+	"mix/internal/config"
+	"mix/internal/llm/tools"
 )
 
 //go:embed prompts/*.md

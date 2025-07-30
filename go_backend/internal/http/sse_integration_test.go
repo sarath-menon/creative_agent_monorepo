@@ -13,10 +13,10 @@ import (
 	"testing"
 	"time"
 
-	"go_general_agent/internal/api"
-	"go_general_agent/internal/app"
-	"go_general_agent/internal/config"
-	"go_general_agent/internal/db"
+	"mix/internal/api"
+	"mix/internal/app"
+	"mix/internal/config"
+	"mix/internal/db"
 
 	_ "github.com/ncruces/go-sqlite3/driver"
 	_ "github.com/ncruces/go-sqlite3/embed"

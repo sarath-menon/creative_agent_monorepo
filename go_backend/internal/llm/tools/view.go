@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"go_general_agent/internal/logging"
+	"mix/internal/logging"
 )
 
 type ViewParams struct {

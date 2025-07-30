@@ -7,21 +7,21 @@ import (
 	"strings"
 	"sync"
 
-	"go_general_agent/internal/config"
-	"go_general_agent/internal/llm/models"
-	"go_general_agent/internal/logging"
+	"mix/internal/config"
+	"mix/internal/llm/models"
+	"mix/internal/logging"
 )
 
 func GetAgentPrompt(agentName config.AgentName, provider models.ModelProvider) string {
 	var basePrompt string
-	
+
 	if agentName == config.AgentSub {
 		// Load task agent system prompt
 		basePrompt = LoadPromptWithStandardVars("task_agent", nil)
 	} else {
 		// Load main agent prompt with standard environment variables
-		basePrompt = LoadPromptWithStandardVars("coder", nil)
-		
+		basePrompt = LoadPromptWithStandardVars("system", nil)
+
 		if agentName == config.AgentMain {
 			// Add context from project-specific instruction files if they exist
 			contextContent := getContextFromPaths()
@@ -31,7 +31,7 @@ func GetAgentPrompt(agentName config.AgentName, provider models.ModelProvider) s
 			}
 		}
 	}
-	
+
 	return basePrompt
 }
 

@@ -7,10 +7,10 @@ import (
 	"sort"
 	"strings"
 
-	"go_general_agent/internal/app"
-	"go_general_agent/internal/config"
-	"go_general_agent/internal/llm/agent"
-	"go_general_agent/internal/llm/tools"
+	"mix/internal/app"
+	"mix/internal/config"
+	"mix/internal/llm/agent"
+	"mix/internal/llm/tools"
 )
 
 // ContextResponse represents the JSON response for the /context command
@@ -47,17 +47,17 @@ type HelpCommand struct {
 
 // SessionResponse represents the JSON response for the /session command
 type SessionResponse struct {
-	Type              string  `json:"type"`
-	ID                string  `json:"id"`
-	Title             string  `json:"title"`
-	MessageCount      int64   `json:"messageCount"`
-	TotalTokens       int64   `json:"totalTokens"`
-	PromptTokens      int64   `json:"promptTokens"`
-	CompletionTokens  int64   `json:"completionTokens"`
-	Cost              float64 `json:"cost"`
-	CreatedAt         int64   `json:"createdAt"`
-	UpdatedAt         int64   `json:"updatedAt"`
-	ParentSessionID   string  `json:"parentSessionId,omitempty"`
+	Type             string  `json:"type"`
+	ID               string  `json:"id"`
+	Title            string  `json:"title"`
+	MessageCount     int64   `json:"messageCount"`
+	TotalTokens      int64   `json:"totalTokens"`
+	PromptTokens     int64   `json:"promptTokens"`
+	CompletionTokens int64   `json:"completionTokens"`
+	Cost             float64 `json:"cost"`
+	CreatedAt        int64   `json:"createdAt"`
+	UpdatedAt        int64   `json:"updatedAt"`
+	ParentSessionID  string  `json:"parentSessionId,omitempty"`
 }
 
 // McpResponse represents the JSON response for the /mcp command
@@ -90,15 +90,15 @@ type SessionsResponse struct {
 
 // SessionSummary represents a session summary in the sessions list
 type SessionSummary struct {
-	ID               string  `json:"id"`
-	Title            string  `json:"title"`
-	MessageCount     int64   `json:"messageCount"`
-	TotalTokens      int64   `json:"totalTokens"`
-	Cost             float64 `json:"cost"`
-	CreatedAt        int64   `json:"createdAt"`
-	UpdatedAt        int64   `json:"updatedAt"`
-	ParentSessionID  string  `json:"parentSessionId,omitempty"`
-	IsCurrent        bool    `json:"isCurrent"`
+	ID              string  `json:"id"`
+	Title           string  `json:"title"`
+	MessageCount    int64   `json:"messageCount"`
+	TotalTokens     int64   `json:"totalTokens"`
+	Cost            float64 `json:"cost"`
+	CreatedAt       int64   `json:"createdAt"`
+	UpdatedAt       int64   `json:"updatedAt"`
+	ParentSessionID string  `json:"parentSessionId,omitempty"`
+	IsCurrent       bool    `json:"isCurrent"`
 }
 
 // ErrorResponse represents error responses from commands
@@ -108,7 +108,7 @@ type ErrorResponse struct {
 	Command string `json:"command,omitempty"`
 }
 
-// MessageResponse represents informational messages from commands  
+// MessageResponse represents informational messages from commands
 type MessageResponse struct {
 	Type    string `json:"type"`
 	Message string `json:"message"`
@@ -245,11 +245,11 @@ func createSessionHandler(app *app.App) func(ctx context.Context, args string) (
 			if err != nil {
 				return returnError("session", fmt.Sprintf("Error retrieving current session: %v", err))
 			}
-			
+
 			if currentSession == nil {
 				return returnMessage("session", "No active session. Use /sessions to list available sessions.")
 			}
-			
+
 			// Create structured response
 			response := SessionResponse{
 				Type:             "session",
@@ -264,13 +264,13 @@ func createSessionHandler(app *app.App) func(ctx context.Context, args string) (
 				UpdatedAt:        currentSession.UpdatedAt,
 				ParentSessionID:  currentSession.ParentSessionID,
 			}
-			
+
 			// Convert to JSON
 			jsonData, err := json.Marshal(response)
 			if err != nil {
 				return returnError("session", fmt.Sprintf("Error marshaling session data: %v", err))
 			}
-			
+
 			return string(jsonData), nil
 		} else {
 			// Switch to specific session
@@ -357,7 +357,7 @@ func createMcpHandler() func(ctx context.Context, args string) (string, error) {
 		var servers []McpServer
 		for _, name := range serverNames {
 			tools := serverTools[name]
-			
+
 			// Determine connection status
 			var statusText string
 			connected := len(tools) > 0
@@ -423,7 +423,7 @@ func createContextHandler(app *app.App) func(ctx context.Context, args string) (
 		if err != nil {
 			return returnError("context", fmt.Sprintf("Error retrieving current session: %v", err))
 		}
-		
+
 		if currentSession == nil {
 			return returnMessage("context", "No active session. Use /sessions to list available sessions.")
 		}
@@ -431,7 +431,7 @@ func createContextHandler(app *app.App) func(ctx context.Context, args string) (
 		// Get current model's context window from agent
 		currentModel := app.CoderAgent.Model()
 		maxContextTokens := int64(currentModel.ContextWindow)
-		
+
 		// System prompt estimation (rough approximation)
 		systemPromptTokens := int64(5000) // Typical system prompt size
 		systemPromptPercent := float64(systemPromptTokens) / float64(maxContextTokens) * 100
@@ -442,11 +442,11 @@ func createContextHandler(app *app.App) func(ctx context.Context, args string) (
 
 		// Calculate conversation tokens (excluding system overhead)
 		conversationTokens := currentSession.PromptTokens + currentSession.CompletionTokens
-		
+
 		// User and assistant message breakdown
 		userTokens := currentSession.PromptTokens
 		userPercent := float64(userTokens) / float64(maxContextTokens) * 100
-		
+
 		assistantTokens := currentSession.CompletionTokens
 		assistantPercent := float64(assistantTokens) / float64(maxContextTokens) * 100
 

@@ -8,16 +8,16 @@ import (
 	"sync"
 	"time"
 
-	"go_general_agent/internal/config"
-	"go_general_agent/internal/llm/models"
-	"go_general_agent/internal/llm/prompt"
-	"go_general_agent/internal/llm/provider"
-	"go_general_agent/internal/llm/tools"
-	"go_general_agent/internal/logging"
-	"go_general_agent/internal/message"
-	"go_general_agent/internal/permission"
-	"go_general_agent/internal/pubsub"
-	"go_general_agent/internal/session"
+	"mix/internal/config"
+	"mix/internal/llm/models"
+	"mix/internal/llm/prompt"
+	"mix/internal/llm/provider"
+	"mix/internal/llm/tools"
+	"mix/internal/logging"
+	"mix/internal/message"
+	"mix/internal/permission"
+	"mix/internal/pubsub"
+	"mix/internal/session"
 )
 
 // Common errors
@@ -264,7 +264,7 @@ func (a *agent) Run(ctx context.Context, sessionID string, content string, attac
 
 func (a *agent) processGeneration(ctx context.Context, sessionID, content string, attachmentParts []message.ContentPart) AgentEvent {
 	logging.Info("[Agent] Starting message processing for session", "sessionID", sessionID, "contentPreview", fmt.Sprintf("%.100s...", content))
-	cfg := config.Get()
+	_ = config.Get()
 	// List existing messages; if none, start title generation asynchronously.
 	msgs, err := a.messages.List(ctx, sessionID)
 	if err != nil {
@@ -457,7 +457,10 @@ func (a *agent) streamAndHandleEvents(ctx context.Context, sessionID string, msg
 			}
 			// Log tool execution result
 			isError := toolErr != nil
-			resultLength := len(toolResult.Content)
+			if isError {
+				logging.Error("[Agent] Tool execution failed", "toolName", toolCall.Name, "sessionID", sessionID, "toolCallID", toolCall.ID, "hasError", isError)
+			}
+			_ = len(toolResult.Content)
 
 			toolResults[i] = message.ToolResult{
 				ToolCallID: toolCall.ID,

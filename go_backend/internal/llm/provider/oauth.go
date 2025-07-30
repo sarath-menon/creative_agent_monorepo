@@ -21,7 +21,7 @@ import (
 	"sync"
 	"time"
 
-	"go_general_agent/internal/logging"
+	"mix/internal/logging"
 )
 
 // OAuthCredentials holds OAuth token information
@@ -293,7 +293,7 @@ func (flow *OAuthFlow) GetAuthorizationURL() string {
 // OpenBrowser opens the authorization URL in the default browser
 func (flow *OAuthFlow) OpenBrowser() error {
 	authURL := flow.GetAuthorizationURL()
-	
+
 	var err error
 	switch runtime.GOOS {
 	case "linux":
@@ -305,7 +305,7 @@ func (flow *OAuthFlow) OpenBrowser() error {
 	default:
 		err = fmt.Errorf("unsupported platform")
 	}
-	
+
 	return err
 }
 
@@ -313,20 +313,20 @@ func (flow *OAuthFlow) OpenBrowser() error {
 func (flow *OAuthFlow) ExchangeCodeForTokens(authCode string) (*OAuthCredentials, error) {
 	// Parse authorization code in format "code#state"
 	authCode = strings.TrimSpace(authCode)
-	
+
 	// Split on # to get code and state parts
 	splits := strings.Split(authCode, "#")
 	if len(splits) != 2 {
 		return nil, fmt.Errorf("invalid authorization code format. Expected 'code#state', got: %s", authCode)
 	}
-	
+
 	codePart := strings.TrimSpace(splits[0])
 	statePart := strings.TrimSpace(splits[1])
-	
+
 	if codePart == "" {
 		return nil, fmt.Errorf("authorization code part is empty")
 	}
-	
+
 	if statePart == "" {
 		return nil, fmt.Errorf("state part is empty")
 	}
@@ -424,16 +424,16 @@ func (flow *OAuthFlow) fallbackToBrowserInstructions(authCode string) (*OAuthCre
 	fmt.Printf("Your authorization code (for reference): %s\n", authCodePreview)
 	fmt.Println(strings.Repeat("=", 60))
 	fmt.Printf("\nDo you want to enter an access token manually? (y/N): ")
-	
+
 	reader := bufio.NewReader(os.Stdin)
 	response, _ := reader.ReadString('\n')
 	response = strings.TrimSpace(strings.ToLower(response))
-	
+
 	if response == "y" || response == "yes" {
 		fmt.Print("Enter access token: ")
 		token, _ := reader.ReadString('\n')
 		token = strings.TrimSpace(token)
-		
+
 		if token != "" && strings.HasPrefix(token, "sk-ant-") {
 			// Create credentials with manual token
 			expiresAt := time.Now().Unix() + 3600 // 1 hour default
@@ -448,7 +448,7 @@ func (flow *OAuthFlow) fallbackToBrowserInstructions(authCode string) (*OAuthCre
 			return nil, fmt.Errorf("invalid access token format - should start with 'sk-ant-'")
 		}
 	}
-	
+
 	return nil, fmt.Errorf("manual token extraction required - automatic exchange blocked by Cloudflare")
 }
 

@@ -8,14 +8,15 @@ import (
 	"io"
 	"time"
 
+	"mix/internal/config"
+	"mix/internal/llm/models"
+	"mix/internal/llm/tools"
+	"mix/internal/logging"
+	"mix/internal/message"
+
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/option"
 	"github.com/openai/openai-go/shared"
-	"go_general_agent/internal/config"
-	"go_general_agent/internal/llm/models"
-	"go_general_agent/internal/llm/tools"
-	"go_general_agent/internal/logging"
-	"go_general_agent/internal/message"
 )
 
 type openaiOptions struct {

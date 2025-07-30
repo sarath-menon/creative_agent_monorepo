@@ -8,11 +8,11 @@ import (
 	"fmt"
 	"sync"
 
-	"go_general_agent/internal/config"
-	"go_general_agent/internal/llm/tools"
-	"go_general_agent/internal/logging"
-	"go_general_agent/internal/permission"
-	"go_general_agent/internal/version"
+	"mix/internal/config"
+	"mix/internal/llm/tools"
+	"mix/internal/logging"
+	"mix/internal/permission"
+	"mix/internal/version"
 
 	"github.com/mark3labs/mcp-go/client"
 	"github.com/mark3labs/mcp-go/mcp"

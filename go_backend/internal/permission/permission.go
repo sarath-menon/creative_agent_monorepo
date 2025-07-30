@@ -7,9 +7,10 @@ import (
 	"sync"
 	"time"
 
+	"mix/internal/config"
+	"mix/internal/pubsub"
+
 	"github.com/google/uuid"
-	"go_general_agent/internal/config"
-	"go_general_agent/internal/pubsub"
 )
 
 var ErrorPermissionDenied = errors.New("permission denied")
@@ -71,14 +72,14 @@ func (s *permissionService) Deny(permission PermissionRequest) {
 }
 
 func (s *permissionService) Request(opts CreatePermissionRequest) bool {
-	log.Printf("Permission request: SessionID=%s, ToolName=%s, Action=%s, Path=%s", 
+	log.Printf("Permission request: SessionID=%s, ToolName=%s, Action=%s, Path=%s",
 		opts.SessionID, opts.ToolName, opts.Action, opts.Path)
-	
+
 	if config.Get().SkipPermissions {
 		log.Printf("Permissions globally skipped via --dangerously-skip-permissions flag")
 		return true
 	}
-	
+
 	dir := filepath.Dir(opts.Path)
 	if dir == "." {
 		dir = config.WorkingDirectory()

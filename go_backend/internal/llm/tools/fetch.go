@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"go_general_agent/internal/config"
-	"go_general_agent/internal/permission"
+	"mix/internal/config"
+	"mix/internal/permission"
 
 	md "github.com/JohannesKaufmann/html-to-markdown"
 	"github.com/PuerkitoBio/goquery"

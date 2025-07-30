@@ -77,7 +77,7 @@ export function AppDisplayPopover({ isOpen, onOpenChange }: AppDisplayPopoverPro
   ];
   
   // Filter apps to only show specified ones
-  const allowedApps = ['Notes', 'Obsidian', 'Blender', 'Pixelmator Pro'];
+  const allowedApps = ['Notes', 'Obsidian', 'Blender', 'Pixelmator Pro', 'Final Cut Pro'];
   const filteredApps = openApps.filter(app => 
     allowedApps.some(allowedApp => 
       app.name.toLowerCase().includes(allowedApp.toLowerCase())

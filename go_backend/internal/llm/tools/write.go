@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
-	"go_general_agent/internal/config"
-	"go_general_agent/internal/history"
-	"go_general_agent/internal/logging"
-	"go_general_agent/internal/permission"
+	"mix/internal/config"
+	"mix/internal/history"
+	"mix/internal/logging"
+	"mix/internal/permission"
 )
 
 type WriteParams struct {

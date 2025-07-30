@@ -78,16 +78,16 @@ Get structured JSON data directly via stdout:
 
 ```bash
 # Get all sessions
-./build/go_general_agent --query sessions --output-format json
+./build/mix --query sessions --output-format json
 
 # Get available tools (including MCP tools)
-./build/go_general_agent --query tools --output-format json
+./build/mix --query tools --output-format json
 
 # Get MCP server status and their tools
-./build/go_general_agent --query mcp --output-format json
+./build/mix --query mcp --output-format json
 
 # Get available slash commands
-./build/go_general_agent --query commands --output-format json
+./build/mix --query commands --output-format json
 ```
 
 ### HTTP Server Interface
@@ -96,16 +96,16 @@ Recreate also provides an HTTP JSON-RPC server for web-based integrations:
 
 ```bash
 # Start HTTP server on default port (localhost:8080)
-./build/go_general_agent --http-port 8080
+./build/mix --http-port 8080
 
 # Start HTTP server on custom host and port
-./build/go_general_agent --http-port 3000 --http-host 0.0.0.0
+./build/mix --http-port 3000 --http-host 0.0.0.0
 
 # Start HTTP server with permissions skipped (for development/trusted environments)
-./build/go_general_agent --http-port 8080 --dangerously-skip-permissions
+./build/mix --http-port 8080 --dangerously-skip-permissions
 
 # Run HTTP server with debug logging
-./build/go_general_agent --http-port 8080 --debug
+./build/mix --http-port 8080 --debug
 ```
 
 #### HTTP API Usage
@@ -216,19 +216,19 @@ eventSource.addEventListener('error', (event) => {
 ```bash
 # Create a new session
 echo '{"method": "sessions.create", "params": {"title": "New Analysis", "setCurrent": true}, "id": 1}' | \
-./build/go_general_agent --query json --output-format json
+./build/mix --query json --output-format json
 
 # Select a different session
 echo '{"method": "sessions.select", "params": {"id": "session-uuid"}, "id": 1}' | \
-./build/go_general_agent --query json --output-format json
+./build/mix --query json --output-format json
 
 # Get current session
 echo '{"method": "sessions.current", "id": 1}' | \
-./build/go_general_agent --query json --output-format json
+./build/mix --query json --output-format json
 
 # Delete a session
 echo '{"method": "sessions.delete", "params": {"id": "session-uuid"}, "id": 1}' | \
-./build/go_general_agent --query json --output-format json
+./build/mix --query json --output-format json
 ```
 
 Both CLI and HTTP interfaces provide full 2-way communication for session management, enabling programmatic control of Recreate from external applications or scripts. The HTTP interface offers better performance for web-based integrations, while the CLI interface is ideal for shell scripts and simple integrations.

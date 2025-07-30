@@ -10,8 +10,8 @@ import (
 	"strings"
 	"sync"
 
-	"go_general_agent/internal/llm/models"
-	"go_general_agent/internal/logging"
+	"mix/internal/llm/models"
+	"mix/internal/logging"
 
 	"github.com/spf13/viper"
 )

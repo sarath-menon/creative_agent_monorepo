@@ -11,11 +11,12 @@ import (
 	"strings"
 	"time"
 
+	"mix/internal/config"
+	toolspkg "mix/internal/llm/tools"
+	"mix/internal/logging"
+	"mix/internal/message"
+
 	"github.com/google/uuid"
-	"go_general_agent/internal/config"
-	toolspkg "go_general_agent/internal/llm/tools"
-	"go_general_agent/internal/logging"
-	"go_general_agent/internal/message"
 	"google.golang.org/genai"
 )
 
@@ -576,17 +577,17 @@ func contains(s string, substrs ...string) bool {
 // logEmptyResponseDetails logs detailed request and response information when Gemini returns empty responses
 func (g *geminiClient) logEmptyResponseDetails(sessionID string, messages []message.Message, tools []toolspkg.BaseTool, resp *genai.GenerateContentResponse) {
 	timestamp := time.Now().Format("20060102-150405")
-	
+
 	// Create log directory if it doesn't exist
 	logDir := "debug_logs"
 	os.MkdirAll(logDir, 0755)
-	
+
 	// Log request details
 	requestFile := filepath.Join(logDir, fmt.Sprintf("gemini-empty-response-%s-%s-request.txt", sessionID, timestamp))
 	requestData := map[string]interface{}{
 		"timestamp": time.Now().Format(time.RFC3339),
 		"sessionID": sessionID,
-		"messages": messages,
+		"messages":  messages,
 		"tools": func() interface{} {
 			if len(tools) > 0 {
 				return g.convertTools(tools)
@@ -594,19 +595,19 @@ func (g *geminiClient) logEmptyResponseDetails(sessionID string, messages []mess
 			return []string{}
 		}(),
 		"systemMessage": g.providerOptions.systemMessage,
-		"model": g.providerOptions.model,
-		"maxTokens": g.providerOptions.maxTokens,
+		"model":         g.providerOptions.model,
+		"maxTokens":     g.providerOptions.maxTokens,
 	}
-	
+
 	requestJSON, _ := json.MarshalIndent(requestData, "", "  ")
 	os.WriteFile(requestFile, requestJSON, 0644)
-	
+
 	// Log response details
 	responseFile := filepath.Join(logDir, fmt.Sprintf("gemini-empty-response-%s-%s-response.txt", sessionID, timestamp))
 	responseData := map[string]interface{}{
 		"timestamp": time.Now().Format(time.RFC3339),
 		"sessionID": sessionID,
-		"response": resp,
+		"response":  resp,
 		"candidatesCount": func() int {
 			if resp != nil && resp.Candidates != nil {
 				return len(resp.Candidates)
@@ -620,9 +621,9 @@ func (g *geminiClient) logEmptyResponseDetails(sessionID string, messages []mess
 			return nil
 		}(),
 	}
-	
+
 	responseJSON, _ := json.MarshalIndent(responseData, "", "  ")
 	os.WriteFile(responseFile, responseJSON, 0644)
-	
+
 	logging.Info("Empty response debug files created", "requestFile", requestFile, "responseFile", responseFile)
 }

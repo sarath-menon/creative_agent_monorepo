@@ -9,9 +9,9 @@ import (
 	"strconv"
 	"strings"
 
-	"go_general_agent/internal/config"
-	"go_general_agent/internal/permission"
-	"go_general_agent/internal/utils"
+	"mix/internal/config"
+	"mix/internal/permission"
+	"mix/internal/utils"
 )
 
 type PixelmatorParams struct {
@@ -187,7 +187,6 @@ func (p *pixelmatorTool) Run(ctx context.Context, call ToolCall) (ToolResponse, 
 
 	return NewTextResponse(string(resultJSON)), nil
 }
-
 
 func (p *pixelmatorTool) openDocument(ctx context.Context, args interface{}) (*DocumentInfo, error) {
 	var params OpenParams

@@ -9,8 +9,9 @@ import (
 	"sync"
 	"time"
 
+	"mix/internal/pubsub"
+
 	"github.com/go-logfmt/logfmt"
-	"go_general_agent/internal/pubsub"
 )
 
 // Removed persist constants for embedded binary
@@ -46,7 +47,7 @@ func (w *writer) Write(p []byte) (int, error) {
 	if _, err := os.Stdout.Write(p); err != nil {
 		return 0, fmt.Errorf("writing to stdout: %w", err)
 	}
-	
+
 	// Then parse and store the log message for internal use
 	d := logfmt.NewDecoder(bytes.NewReader(p))
 

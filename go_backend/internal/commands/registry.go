@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"go_general_agent/internal/app"
+	"mix/internal/app"
 )
 
 // Registry manages all available commands

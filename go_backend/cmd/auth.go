@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"go_general_agent/internal/llm/provider"
-	"go_general_agent/internal/logging"
+	"mix/internal/llm/provider"
+	"mix/internal/logging"
 
 	"github.com/spf13/cobra"
 )

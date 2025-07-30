@@ -9,8 +9,8 @@ import (
 	_ "github.com/ncruces/go-sqlite3/driver"
 	_ "github.com/ncruces/go-sqlite3/embed"
 
-	"go_general_agent/internal/config"
-	"go_general_agent/internal/logging"
+	"mix/internal/config"
+	"mix/internal/logging"
 
 	"github.com/pressly/goose/v3"
 )

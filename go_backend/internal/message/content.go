@@ -5,7 +5,7 @@ import (
 	"slices"
 	"time"
 
-	"go_general_agent/internal/llm/models"
+	"mix/internal/llm/models"
 )
 
 type MessageRole string

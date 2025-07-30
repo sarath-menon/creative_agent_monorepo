@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"os"
 
-	"go_general_agent/internal/llm/models"
-	"go_general_agent/internal/llm/tools"
-	"go_general_agent/internal/message"
+	"mix/internal/llm/models"
+	"mix/internal/llm/tools"
+	"mix/internal/message"
 )
 
 type EventType string

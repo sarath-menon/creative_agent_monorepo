@@ -9,11 +9,11 @@ import (
 	"strings"
 	"time"
 
-	"go_general_agent/internal/app"
-	"go_general_agent/internal/commands"
-	"go_general_agent/internal/config"
-	"go_general_agent/internal/llm/agent"
-	"go_general_agent/internal/llm/tools"
+	"mix/internal/app"
+	"mix/internal/commands"
+	"mix/internal/config"
+	"mix/internal/llm/agent"
+	"mix/internal/llm/tools"
 )
 
 // JSON-RPC Request
