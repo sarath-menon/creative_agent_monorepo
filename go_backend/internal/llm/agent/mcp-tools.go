@@ -130,7 +130,7 @@ func (m *MCPClientManager) Close() {
 
 	for name, client := range m.clients {
 		if err := client.Close(); err != nil {
-			logging.Error("error closing mcp client", "server", name, "error", err)
+			logging.Debug("error closing mcp client", "server", name, "error", err)
 		}
 	}
 	m.clients = make(map[string]*client.Client)
@@ -142,7 +142,7 @@ func (m *MCPClientManager) CloseClient(serverName string) {
 
 	if client, exists := m.clients[serverName]; exists {
 		if err := client.Close(); err != nil {
-			logging.Error("error closing mcp client", "server", serverName, "error", err)
+			logging.Debug("error closing mcp client", "server", serverName, "error", err)
 		}
 		delete(m.clients, serverName)
 	}

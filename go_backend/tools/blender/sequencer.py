@@ -2,7 +2,7 @@
 Blender sequencer and timeline utilities.
 """
 
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Optional, Tuple, Union
 import os
 
 
@@ -1082,3 +1082,264 @@ def get_current_frame() -> int:
     import bpy
     
     return bpy.context.scene.frame_current
+
+
+def modify_images_and_videos(
+    sequence_name: str,
+    trim_start: Optional[int] = None,
+    trim_end: Optional[int] = None,
+    scale: Optional[Union[float, Tuple[float, float]]] = None,
+    position: Optional[Tuple[float, float]] = None,
+    rotation: Optional[float] = None
+) -> Dict[str, Any]:
+    """
+    Modify image and video sequences on the timeline (trim, zoom, reposition).
+    
+    This function only works with IMAGE and MOVIE sequence types. Other sequence types
+    (SOUND, TEXT, COLOR, effects) are not supported and will raise an error.
+    
+    Args:
+        sequence_name: Name of the sequence to modify
+        trim_start: Optional new start frame for trimming
+        trim_end: Optional new end frame for trimming
+        scale: Optional scale factor - float for uniform scaling or (x, y) tuple for non-uniform
+        position: Optional (x, y) offset in pixels from center
+        rotation: Optional rotation angle in radians
+        
+    Returns:
+        Dict[str, Any]: Updated sequence information matching get_sequences() format
+        
+    Raises:
+        ImportError: If bpy module is not available
+        ValueError: If sequence is not found, wrong type, or parameters are invalid
+        AttributeError: If sequence editor is not available
+    """
+    import bpy
+    from typing import Union
+    
+    scene = bpy.context.scene
+    
+    if not scene.sequence_editor:
+        raise AttributeError("No sequence editor found - timeline is empty or not initialized")
+    
+    sequences = scene.sequence_editor.sequences
+    
+    # Find the sequence by name
+    target_sequence = None
+    for seq in sequences:
+        if seq.name == sequence_name:
+            target_sequence = seq
+            break
+    
+    if target_sequence is None:
+        raise ValueError(f"Sequence '{sequence_name}' not found")
+    
+    # Check if sequence type is supported
+    if target_sequence.type not in ['IMAGE', 'MOVIE']:
+        raise ValueError(
+            f"Sequence '{sequence_name}' has type '{target_sequence.type}'. "
+            f"This function only supports IMAGE and MOVIE sequences."
+        )
+    
+    # Apply trimming if specified
+    if trim_start is not None or trim_end is not None:
+        original_start = target_sequence.frame_start
+        original_end = target_sequence.frame_final_end
+        original_duration = target_sequence.frame_final_duration
+        
+        new_start = trim_start if trim_start is not None else original_start
+        new_end = trim_end if trim_end is not None else original_end
+        
+        # Validate trim parameters
+        if new_start < 0:
+            raise ValueError(f"Trim start must be non-negative, got: {new_start}")
+        if new_end <= new_start:
+            raise ValueError(f"Trim end ({new_end}) must be greater than trim start ({new_start})")
+        
+        new_duration = new_end - new_start
+        
+        # For videos, check against original duration (can't extend)
+        if target_sequence.type == 'MOVIE' and new_duration > original_duration:
+            raise ValueError(
+                f"Cannot extend video beyond original duration. "
+                f"Requested duration: {new_duration} frames, "
+                f"original duration: {original_duration} frames"
+            )
+        
+        # Apply trimming
+        target_sequence.frame_start = new_start
+        target_sequence.frame_final_end = new_end
+    
+    # Apply transform operations if specified
+    if scale is not None or position is not None or rotation is not None:
+        if not hasattr(target_sequence, 'transform'):
+            raise AttributeError(f"Sequence '{sequence_name}' does not support transform operations")
+        
+        transform = target_sequence.transform
+        
+        # Apply scaling
+        if scale is not None:
+            if isinstance(scale, (int, float)):
+                # Uniform scaling
+                if scale <= 0:
+                    raise ValueError(f"Scale must be positive, got: {scale}")
+                transform.scale_x = scale
+                transform.scale_y = scale
+            elif isinstance(scale, (tuple, list)) and len(scale) == 2:
+                # Non-uniform scaling
+                scale_x, scale_y = scale
+                if scale_x <= 0 or scale_y <= 0:
+                    raise ValueError(f"Scale values must be positive, got: {scale}")
+                transform.scale_x = scale_x
+                transform.scale_y = scale_y
+            else:
+                raise ValueError(f"Scale must be a number or (x, y) tuple, got: {scale}")
+        
+        # Apply position offset
+        if position is not None:
+            if not isinstance(position, (tuple, list)) or len(position) != 2:
+                raise ValueError(f"Position must be (x, y) tuple, got: {position}")
+            transform.offset_x = position[0]
+            transform.offset_y = position[1]
+        
+        # Apply rotation
+        if rotation is not None:
+            if not isinstance(rotation, (int, float)):
+                raise ValueError(f"Rotation must be a number (radians), got: {rotation}")
+            transform.rotation = rotation
+    
+    # Auto-fit sequencer view to show all sequences
+    try:
+        fit_sequencer_view()
+    except:
+        pass  # Silently ignore fit errors
+    
+    # Return updated sequence info in same format as get_sequences()
+    transform_data, original_res, is_resized = _get_sequence_transform_info(target_sequence)
+    
+    return {
+        "name": target_sequence.name,
+        "type": target_sequence.type,
+        "channel": target_sequence.channel,
+        "frame_start": target_sequence.frame_start,
+        "frame_end": target_sequence.frame_final_end,
+        "duration": target_sequence.frame_final_duration,
+        "filepath": _get_sequence_filepath(target_sequence),
+        "original_resolution": original_res,
+        "transform": transform_data,
+        "is_resized": is_resized
+    }
+
+
+def modify_audio(
+    sequence_name: str,
+    trim_start: Optional[int] = None,
+    trim_end: Optional[int] = None,
+    volume: Optional[float] = None,
+    pan: Optional[float] = None
+) -> Dict[str, Any]:
+    """
+    Modify audio sequences on the timeline (trim, volume, pan).
+    
+    This function only works with SOUND sequence types. Other sequence types
+    (IMAGE, MOVIE, TEXT, COLOR, effects) are not supported and will raise an error.
+    
+    Args:
+        sequence_name: Name of the sequence to modify
+        trim_start: Optional new start frame for trimming
+        trim_end: Optional new end frame for trimming
+        volume: Optional volume level (0.0-100.0, where 100.0 is full volume)
+        pan: Optional stereo panning (-inf to +inf, 0.0 is center, only for mono sources)
+        
+    Returns:
+        Dict[str, Any]: Updated sequence information matching get_sequences() format
+        
+    Raises:
+        ImportError: If bpy module is not available
+        ValueError: If sequence is not found, wrong type, or parameters are invalid
+        AttributeError: If sequence editor is not available
+    """
+    import bpy
+    
+    scene = bpy.context.scene
+    
+    if not scene.sequence_editor:
+        raise AttributeError("No sequence editor found - timeline is empty or not initialized")
+    
+    sequences = scene.sequence_editor.sequences
+    
+    # Find the sequence by name
+    target_sequence = None
+    for seq in sequences:
+        if seq.name == sequence_name:
+            target_sequence = seq
+            break
+    
+    if target_sequence is None:
+        raise ValueError(f"Sequence '{sequence_name}' not found")
+    
+    # Check if sequence type is supported
+    if target_sequence.type != 'SOUND':
+        raise ValueError(
+            f"Sequence '{sequence_name}' has type '{target_sequence.type}'. "
+            f"This function only supports SOUND sequences."
+        )
+    
+    # Apply trimming if specified
+    if trim_start is not None or trim_end is not None:
+        original_start = target_sequence.frame_start
+        original_end = target_sequence.frame_final_end
+        original_duration = target_sequence.frame_final_duration
+        
+        new_start = trim_start if trim_start is not None else original_start
+        new_end = trim_end if trim_end is not None else original_end
+        
+        # Validate trim parameters
+        if new_start < 0:
+            raise ValueError(f"Trim start must be non-negative, got: {new_start}")
+        if new_end <= new_start:
+            raise ValueError(f"Trim end ({new_end}) must be greater than trim start ({new_start})")
+        
+        new_duration = new_end - new_start
+        
+        # Audio can only be trimmed, not extended beyond original duration
+        if new_duration > original_duration:
+            raise ValueError(
+                f"Cannot extend audio beyond original duration. "
+                f"Requested duration: {new_duration} frames, "
+                f"original duration: {original_duration} frames"
+            )
+        
+        # Apply trimming
+        target_sequence.frame_start = new_start
+        target_sequence.frame_final_end = new_end
+    
+    # Apply audio modifications if specified
+    if volume is not None:
+        if not (0.0 <= volume <= 100.0):
+            raise ValueError(f"Volume must be between 0.0 and 100.0, got: {volume}")
+        target_sequence.volume = volume
+    
+    if pan is not None:
+        if not isinstance(pan, (int, float)):
+            raise ValueError(f"Pan must be a number, got: {pan}")
+        target_sequence.pan = pan
+    
+    # Auto-fit sequencer view to show all sequences
+    try:
+        fit_sequencer_view()
+    except:
+        pass  # Silently ignore fit errors
+    
+    # Return updated sequence info in same format as get_sequences()
+    return {
+        "name": target_sequence.name,
+        "type": target_sequence.type,
+        "channel": target_sequence.channel,
+        "frame_start": target_sequence.frame_start,
+        "frame_end": target_sequence.frame_final_end,
+        "duration": target_sequence.frame_final_duration,
+        "filepath": _get_sequence_filepath(target_sequence),
+        "volume": getattr(target_sequence, 'volume', None),
+        "pan": getattr(target_sequence, 'pan', None)
+    }

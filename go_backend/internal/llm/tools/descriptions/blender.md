@@ -4,6 +4,7 @@ These are python tools for video editing automation using the blender MCP
 ## Instructions
 
 - Use ONLY with `execute_blender_code` - these are Blender-specific Python function
+- Blender has a "Video Editing" workspace, even though it may not be listed when you check with bpy
 - You MUST run the final python script within blender's execution environment as a SINGLE code block. Don't create separate files or split into multiple execution calls - each `execute_blender_code` call is stateless and variables/imports don't persist between calls.
 -  You MUST use absolute file paths when working, since Blender's working directory may not match your project directory.
 - **ALL functions are exposed through `blender` - NEVER import from submodules:**
@@ -14,7 +15,7 @@ These are python tools for video editing automation using the blender MCP
     tools_path = filepath.Join($<workdir>, "go_backend", "tools")
     sys.path.insert(0, tools_path)
     from blender import (
-        get_current_workspace, get_available_workspaces,
+        get_sequences
     )
     ```
 
@@ -49,7 +50,6 @@ add_text_sequence('Title', 3, 100, 60)      # text overlay
 
 ```python
 # Check available workspaces and switch to Video Editing
-workspaces = get_available_workspaces()
 current = get_current_workspace()
 print(f"Current workspace: {current}")
 
@@ -244,6 +244,37 @@ Get the current playhead position on the timeline
 
 **Returns:**
 - `int` - Current frame number
+
+### modify_images_and_videos(sequence_name, trim_start=None, trim_end=None, scale=None, position=None, rotation=None)
+Modify image and video sequences on the timeline (trim, zoom, reposition)
+
+**Parameters:**
+- `sequence_name` (str) - Name of the sequence to modify
+- `trim_start` (Optional[int]) - New start frame for trimming
+- `trim_end` (Optional[int]) - New end frame for trimming
+- `scale` (Optional[Union[float, Tuple[float, float]]]) - Scale factor - float for uniform or (x, y) tuple for non-uniform
+- `position` (Optional[Tuple[float, float]]) - (x, y) offset in pixels from center
+- `rotation` (Optional[float]) - Rotation angle in radians
+
+**Returns:**
+- `Dict[str, Any]` - Updated sequence info dictionary matching get_sequences() format
+
+**Note:** Only works with IMAGE and MOVIE sequence types. Other types (SOUND, TEXT, COLOR, effects) will raise an error.
+
+### modify_audio(sequence_name, trim_start=None, trim_end=None, volume=None, pan=None)
+Modify audio sequences on the timeline (trim, volume, pan)
+
+**Parameters:**
+- `sequence_name` (str) - Name of the sequence to modify
+- `trim_start` (Optional[int]) - New start frame for trimming
+- `trim_end` (Optional[int]) - New end frame for trimming
+- `volume` (Optional[float]) - Volume level (0.0-100.0, where 100.0 is full volume)
+- `pan` (Optional[float]) - Stereo panning (-inf to +inf, 0.0 is center, only for mono sources)
+
+**Returns:**
+- `Dict[str, Any]` - Updated sequence info dictionary matching get_sequences() format
+
+**Note:** Only works with SOUND sequence types. Other types (IMAGE, MOVIE, TEXT, COLOR, effects) will raise an error.
 
 ## Timeline operations
 

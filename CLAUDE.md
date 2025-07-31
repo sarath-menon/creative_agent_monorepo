@@ -9,8 +9,6 @@ make clean        # Clean build artifacts (we rarely need this)
 make tail-log     # Reads the current log file (last 100 lines of code)
 ```
 
-**IMPORTANT:**
-
 * **Do NOT build the program yourself to check for errors—ever.** All output is written to `dev.log`. Run `make tail-log` to view it.
 * **Do NOT stop the dev server.** It stays running, auto-compiles, and auto-reloads via the Go `air` package, logging to `dev.log`.
 * **Run `make` from the project’s top-level directory.** If it fails, you probably weren’t there.

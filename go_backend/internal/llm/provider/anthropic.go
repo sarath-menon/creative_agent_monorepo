@@ -103,6 +103,9 @@ func newAnthropicClient(opts providerClientOptions) AnthropicClient {
 		anthropicClientOptions = append(anthropicClientOptions, bedrock.WithLoadDefaultConfig(context.Background()))
 	}
 
+	// Add request timeout to prevent indefinite hangs
+	anthropicClientOptions = append(anthropicClientOptions, option.WithRequestTimeout(60*time.Second))
+
 	client := anthropic.NewClient(anthropicClientOptions...)
 	return &anthropicClient{
 		providerOptions:   opts,
@@ -297,6 +300,7 @@ func (a *anthropicClient) send(ctx context.Context, messages []message.Message, 
 				a.client = anthropic.NewClient(
 					option.WithAuthToken(refreshedCreds.AccessToken),
 					option.WithHeader("anthropic-beta", "oauth-2025-04-20"),
+					option.WithRequestTimeout(60*time.Second),
 				)
 				logging.Info("Refreshed OAuth token proactively")
 			}
@@ -341,6 +345,7 @@ func (a *anthropicClient) send(ctx context.Context, messages []message.Message, 
 					a.client = anthropic.NewClient(
 						option.WithAuthToken(refreshedCreds.AccessToken),
 						option.WithHeader("anthropic-beta", "oauth-2025-04-20"),
+						option.WithRequestTimeout(60*time.Second),
 					)
 					logging.Info("Refreshed OAuth token and retrying request")
 					continue
@@ -401,6 +406,7 @@ func (a *anthropicClient) stream(ctx context.Context, messages []message.Message
 				a.client = anthropic.NewClient(
 					option.WithAuthToken(refreshedCreds.AccessToken),
 					option.WithHeader("anthropic-beta", "oauth-2025-04-20"),
+					option.WithRequestTimeout(60*time.Second),
 				)
 				logging.Info("Refreshed OAuth token proactively for streaming")
 			}
@@ -531,6 +537,7 @@ func (a *anthropicClient) stream(ctx context.Context, messages []message.Message
 					a.client = anthropic.NewClient(
 						option.WithAuthToken(refreshedCreds.AccessToken),
 						option.WithHeader("anthropic-beta", "oauth-2025-04-20"),
+						option.WithRequestTimeout(60*time.Second),
 					)
 					logging.Info("Refreshed OAuth token and retrying streaming request")
 					continue

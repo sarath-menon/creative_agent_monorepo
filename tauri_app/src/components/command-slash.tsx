@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { Shield, HelpCircle, Command, ArrowLeft, Accessibility, Folder, Monitor, Mic } from 'lucide-react';
+import { Shield, HelpCircle, Command, ArrowLeft, Accessibility, Folder, Monitor, Mic, RefreshCw } from 'lucide-react';
 import {
   Command as CommandPrimitive,
   CommandEmpty,
@@ -30,6 +30,19 @@ interface CommandSlashProps {
 
 const slashCommands: SlashCommand[] = [
   {
+    id: 'clear',
+    name: 'clear',
+    description: 'Start a new session',
+    icon: RefreshCw,
+  },
+ 
+  {
+    id: 'context',
+    name: 'context',
+    description: 'Show context usage breakdown',
+    icon: Command,
+  },
+   {
     id: 'help',
     name: 'help',
     description: 'Get assistance and guidance',
@@ -41,12 +54,7 @@ const slashCommands: SlashCommand[] = [
     description: 'Model Context Protocol',
     icon: Command,
   },
-  {
-    id: 'context',
-    name: 'context',
-    description: 'Show context usage breakdown',
-    icon: Command,
-  },
+
   {
     id: 'permissions',
     name: 'permissions',
