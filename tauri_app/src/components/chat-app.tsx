@@ -40,11 +40,10 @@ import { useMessageHistoryNavigation } from '@/hooks/useMessageHistoryNavigation
 import { useMessageScrolling } from '@/hooks/useMessageScrolling';
 import { LoadingDots } from './loading-dots';
 import { AttachmentPreview } from './attachment-preview';
-import { SlashCommandDropdown, shouldShowSlashCommands, handleSlashCommandNavigation, slashCommands } from './slash-command-dropdown';
+import { CommandSlash, shouldShowSlashCommands, handleSlashCommandNavigation, slashCommands } from './command-slash';
 import { ResponseRenderer } from './response-renderer';
 import { MessageAttachmentDisplay } from './message-attachment-display';
 import { SessionHeader } from './session-header';
-import { PermissionsPopover } from './app-display-popover';
 
 
 type ToolCall = {
@@ -69,7 +68,7 @@ export function ChatApp() {
   const [showSlashCommands, setShowSlashCommands] = useState(false);
   const [selectedCommandIndex, setSelectedCommandIndex] = useState(0);
   const [inputElement, setInputElement] = useState<HTMLTextAreaElement | null>(null);
-  const [permissionsPopoverOpen, setPermissionsPopoverOpen] = useState(false);
+  const [showCommands, setShowCommands] = useState(false);
   const interruptedMessageAddedRef = useRef(false);
 
 
@@ -159,18 +158,37 @@ export function ChatApp() {
     // Sync media store with text changes (bidirectional sync)
     syncWithText(value);
     
-    // Handle slash commands using utility function
+    // Check if user just typed a slash to open Command-K menu
+    if (value.endsWith('/') && value.length > 0 && value[value.length - 1] === '/') {
+      // Remove the slash and open Command-K menu
+      setText(value.slice(0, -1));
+      setShowCommands(true);
+      setShowSlashCommands(false);
+      return;
+    }
+    
+    // Handle slash commands using utility function (for other cases)
     const shouldShow = shouldShowSlashCommands(value);
     setShowSlashCommands(shouldShow);
-    if (shouldShow) {
-      setSelectedCommandIndex(0);
+    if (!shouldShow) {
+      setShowCommands(false);
     }
   };
 
   const handleSlashCommandSelect = async (command: typeof slashCommands[0]) => {
-    const commandText = `/${command.name}`;
     setShowSlashCommands(false);
-    await submitMessage(commandText);
+    // Remove the slash from the text and open Command-K menu
+    setText(text.slice(0, -1)); // Remove the trailing slash
+    setShowCommands(true);
+  };
+
+  const handleCommandExecute = (command: string) => {
+    setShowCommands(false);
+    submitMessage(`/${command}`);
+  };
+
+  const handleCommandClose = () => {
+    setShowCommands(false);
   };
 
 
@@ -456,7 +474,6 @@ export function ChatApp() {
               <AIInputButton onClick={handleFolderSelect} title={selectedFolder ? `Current folder: ${selectedFolder}` : 'Select parent folder'}>
                 <FolderIcon className={`size-6 ${selectedFolder ? 'text-blue-400' : ''}`} />
               </AIInputButton>
-              <PermissionsPopover isOpen={permissionsPopoverOpen} onOpenChange={setPermissionsPopoverOpen} />
             </AIInputTools>
             <AIInputSubmit 
               disabled={isSubmitDisabled}
@@ -467,12 +484,13 @@ export function ChatApp() {
         </AIInput>
         </div>
         
-        {/* Slash Command Dropdown */}
-        <SlashCommandDropdown 
-          isVisible={showSlashCommands}
-          selectedIndex={selectedCommandIndex}
-          onCommandSelect={handleSlashCommandSelect}
-        />
+        {/* Unified Command System */}
+        {showCommands && (
+          <CommandSlash
+            onExecuteCommand={handleCommandExecute}
+            onClose={handleCommandClose}
+          />
+        )}
 
         {/* File Reference Dropdown with Command Component */}
         {fileRef.show && (
