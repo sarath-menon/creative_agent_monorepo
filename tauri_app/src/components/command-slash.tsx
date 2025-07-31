@@ -238,7 +238,7 @@ export function CommandSlash({ onExecuteCommand, onClose }: CommandSlashProps) {
                       >
                         <Icon className="size-4 text-muted-foreground" />
                         <div className="flex-1">
-                          <div className="font-medium text-sm">/{command.name}</div>
+                          <div className="font-medium text-sm">{command.name}</div>
                           <div className="text-xs text-muted-foreground">{command.description}</div>
                         </div>
                       </CommandItem>

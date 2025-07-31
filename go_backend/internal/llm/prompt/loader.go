@@ -41,7 +41,7 @@ func LoadPromptWithVars(name string, vars map[string]string) string {
 	}
 
 	// Resolve markdown file templates
-	result = resolveMarkdownTemplates(result)
+	result = resolveMarkdownTemplates(result, vars)
 
 	return strings.TrimSpace(result)
 }
@@ -88,7 +88,7 @@ func boolToYesNo(b bool) string {
 }
 
 // resolveMarkdownTemplates resolves {markdown:path} templates in content
-func resolveMarkdownTemplates(content string) string {
+func resolveMarkdownTemplates(content string, vars map[string]string) string {
 	markdownRegex := regexp.MustCompile(`\{markdown:([^}]+)\}`)
 	workspaceRoot := config.WorkingDirectory()
 
@@ -113,6 +113,22 @@ func resolveMarkdownTemplates(content string) string {
 			panic("Failed to load markdown file: " + relativePath + " - " + err.Error())
 		}
 
-		return string(fileContent)
+		result := string(fileContent)
+
+		// Apply variable substitution to included markdown file
+		if vars != nil {
+			for key, value := range vars {
+				placeholder := "$<" + key + ">"
+				result = strings.ReplaceAll(result, placeholder, value)
+			}
+		}
+
+		// Check for unmatched template variables
+		templateRegex := regexp.MustCompile(`\$<[^>]+>`)
+		if matches := templateRegex.FindAllString(result, -1); len(matches) > 0 {
+			panic("Unmatched template variables in markdown file " + relativePath + ": " + strings.Join(matches, ", "))
+		}
+
+		return result
 	})
 }

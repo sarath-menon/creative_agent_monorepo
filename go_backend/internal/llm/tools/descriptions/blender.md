@@ -10,6 +10,9 @@ These are python tools for video editing automation using the blender MCP
     **Positive example**
 
     ```python
+    import sys, json
+    tools_path = filepath.Join($<workdir>, "go_backend", "tools")
+    sys.path.insert(0, tools_path)
     from blender import (
         get_current_workspace, get_available_workspaces,
     )
