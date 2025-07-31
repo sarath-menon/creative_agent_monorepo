@@ -53,7 +53,7 @@ const reducer = (state: State, action: Action): State => {
   }
 };
 
-export const useFileReference = (text: string, setText: (text: string) => void, customBasePath?: string, inputElement?: HTMLTextAreaElement | null) => {
+export const useFileReference = (text: string, setText: (text: string) => void, customBasePath?: string) => {
   const [state, dispatch] = useReducer(reducer, initialState);
   const { currentFiles, fetchFiles, fetchDirectoryContents } = useFileSystem(customBasePath);
   const loadingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -148,13 +148,6 @@ export const useFileReference = (text: string, setText: (text: string) => void, 
     }
     addReference(displayReference, file.path);
     setText(newText);
-    
-    // Focus input and set cursor to end
-    if (inputElement) {
-      inputElement.focus();
-      const textLength = newText.length;
-      inputElement.setSelectionRange(textLength, textLength);
-    }
   };
 
   const handleEscape = () => {
@@ -163,13 +156,6 @@ export const useFileReference = (text: string, setText: (text: string) => void, 
     words[words.length - 1] = '';
     const newText = words.join(' ').trim();
     setText(newText);
-    
-    // Focus input and set cursor to end
-    if (inputElement) {
-      inputElement.focus();
-      const textLength = newText.length;
-      inputElement.setSelectionRange(textLength, textLength);
-    }
   };
 
   const closeDropdown = () => {

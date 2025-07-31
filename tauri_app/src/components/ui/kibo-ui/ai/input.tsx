@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowUpIcon, ArrowUp, Loader2Icon, SendIcon, SquareIcon, XIcon, PlayIcon } from 'lucide-react';
+import { ArrowUpIcon, Loader2Icon, SquareIcon, XIcon, PlayIcon } from 'lucide-react';
 import type {
   ComponentProps,
   HTMLAttributes,

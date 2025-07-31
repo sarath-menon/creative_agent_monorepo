@@ -43,7 +43,6 @@ import { AttachmentPreview } from './attachment-preview';
 import { CommandSlash, shouldShowSlashCommands, handleSlashCommandNavigation, slashCommands } from './command-slash';
 import { ResponseRenderer } from './response-renderer';
 import { MessageAttachmentDisplay } from './message-attachment-display';
-import { SessionHeader } from './session-header';
 
 
 type ToolCall = {
@@ -74,8 +73,6 @@ export function ChatApp() {
 
 
   const { data: session, isLoading: sessionLoading, error: sessionError } = useSession();
-  const createSession = useCreateSession();
-  const sendMessage = useSendMessage();
   const sseStream = usePersistentSSE(session?.id || '');
   const attachments = useAttachmentStore(state => state.attachments);
   const referenceMap = useAttachmentStore(state => state.referenceMap);
@@ -100,7 +97,6 @@ export function ChatApp() {
   const addReference = useAttachmentStore(state => state.addReference);
   const removeReference = useAttachmentStore(state => state.removeReference);
   const syncWithText = useAttachmentStore(state => state.syncWithText);
-  const getMediaFiles = useAttachmentStore(state => state.getMediaFiles);
   const { selectedFolder, selectFolder } = useFolderSelection();
 
   const handleFolderSelect = async () => {
@@ -117,7 +113,7 @@ export function ChatApp() {
   // Memoize the folder path to prevent unnecessary re-renders
   const memoizedFolderPath = useMemo(() => selectedFolder || undefined, [selectedFolder]);
   
-  const fileRef = useFileReference(text, setText, memoizedFolderPath, inputElement);
+  const fileRef = useFileReference(text, setText, memoizedFolderPath);
   
 
   const handleAppSelect = (app: Attachment) => {
@@ -131,13 +127,6 @@ export function ChatApp() {
     addAttachment(app);
     addReference(displayReference, `app:${app.name}`);
     setText(newText);
-    
-    // Focus input and set cursor to end (same as file selection)
-    if (inputElement) {
-      inputElement.focus();
-      const textLength = newText.length;
-      inputElement.setSelectionRange(textLength, textLength);
-    }
   };
 
 
@@ -184,6 +173,13 @@ export function ChatApp() {
 
   const handleCommandExecute = (command: string) => {
     setShowCommands(false);
+    
+    // Handle special commands directly
+    if (command === 'clear') {
+      handleNewSession();
+      return;
+    }
+    
     submitMessage(`/${command}`);
   };
 
@@ -263,6 +259,13 @@ export function ChatApp() {
     }
   }, [sseStream.error]);
 
+  // Declarative focus management - refocus chat input when all popups are closed
+  useEffect(() => {
+    if (!showCommands && !fileRef.show && !showSlashCommands && inputElement) {
+      inputElement.focus();
+    }
+  }, [showCommands, fileRef.show, showSlashCommands, inputElement]);
+
   // Handle pause state changes - simplified since pausing is not implemented
   // (Keeping this for compatibility but it won't trigger since isPaused will always be false)
 
@@ -333,8 +336,16 @@ export function ChatApp() {
   return (
     <TooltipProvider>
       <div className="flex flex-col h-screen px-4 pb-4">
-      {/* Header with New Session Button */}
-      <SessionHeader onNewSession={handleNewSession} />
+      {/* Header with Folder Select Button */}
+      <div className="flex justify-end mb-2">
+        <button
+          onClick={handleFolderSelect}
+          className="flex items-center gap-2 text-sm font-medium text-stone-500 hover:text-stone-100 hover:bg-stone-700/50 rounded-lg p-2 transition-colors"
+          title={selectedFolder ? `Current folder: ${selectedFolder}` : 'Select parent folder'}
+        >
+          <FolderIcon className={`size-5 ${selectedFolder ? 'text-blue-400' : ''}`} />
+        </button>
+      </div>
       
       {/* Conversation Display */}
       <div ref={conversationRef} className="relative h-full flex-1 overflow-y-auto">
@@ -471,9 +482,6 @@ export function ChatApp() {
             autoFocus/>
           <AIInputToolbar>
             <AIInputTools>
-              <AIInputButton onClick={handleFolderSelect} title={selectedFolder ? `Current folder: ${selectedFolder}` : 'Select parent folder'}>
-                <FolderIcon className={`size-6 ${selectedFolder ? 'text-blue-400' : ''}`} />
-              </AIInputButton>
             </AIInputTools>
             <AIInputSubmit 
               disabled={isSubmitDisabled}

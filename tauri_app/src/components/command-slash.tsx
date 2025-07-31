@@ -42,18 +42,6 @@ const slashCommands: SlashCommand[] = [
     icon: Command,
   },
   {
-    id: 'session',
-    name: 'session',
-    description: 'User Session Management',
-    icon: Command,
-  },
-  {
-    id: 'sessions',
-    name: 'sessions',
-    description: 'List all available sessions',
-    icon: Command,
-  },
-  {
     id: 'context',
     name: 'context',
     description: 'Show context usage breakdown',
@@ -263,23 +251,18 @@ export function CommandSlash({ onExecuteCommand, onClose }: CommandSlashProps) {
         </CommandList>
         
         {/* Bottom Toolbar */}
-        <div className="h-6 px-3 py-1 bg-gray-50/80 dark:bg-gray-800/80 border-t border-gray-200/50 dark:border-gray-700/50 flex items-center justify-between text-xs">
-          <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
-            <span className="font-medium">
-              {showingPermissions ? 'System Permissions' : 'Commands'}
-            </span>
-          </div>
+        <div className="h-6 px-3 py-1 bg-gray-50/80 dark:bg-gray-800/80 border-t border-gray-200/50 dark:border-gray-700/50 flex items-center justify-end text-xs">
           
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-2">
             <div className="flex items-center gap-0.5">
-              <kbd className="px-1 py-0 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded text-gray-600 dark:text-gray-300 font-mono text-xs">
+              <kbd className="px-1 py-0 bg-white dark:bg-gray-700  rounded text-muted-foreground font-mono text-[10px]">
                 ↵
               </kbd>
               <span className="text-gray-500 dark:text-gray-400">select</span>
             </div>
             
             <div className="flex items-center gap-0.5">
-              <kbd className="px-1 py-0 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded text-gray-600 dark:text-gray-300 font-mono text-xs">
+              <kbd className="px-1 py-0 bg-white dark:bg-gray-700  rounded text-muted-foreground font-mono text-[10px]">
                 esc
               </kbd>
               <span className="text-gray-500 dark:text-gray-400">
