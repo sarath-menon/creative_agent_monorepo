@@ -9,8 +9,16 @@ IMPORTANT INSTRUCTIONS:
 from typing import List, Dict, Any, Optional, Tuple, Union
 import os
 
+__all__ = [
+    'get_timeline_items', 'get_sequence_resize_info', 'add_image', 'add_video', 'add_audio',
+    'add_transition', 'add_text', 'add_color', 'delete_timeline_item', 'fit_sequencer_view',
+    'set_frame_range', 'get_frame_range', 'set_current_frame', 'get_current_frame',
+    'modify_image', 'modify_video', 'modify_audio', 'duplicate_timeline_element',
+    'blade_cut', 'detach_audio_from_video'
+]
 
-def get_timeline_item(channel: Optional[int] = None) -> List[Dict[str, Any]]:
+
+def get_timeline_items(channel: Optional[int] = None) -> List[Dict[str, Any]]:
     """
     Get timeline sequences, optionally filtered by channel.
 
@@ -245,7 +253,7 @@ def add_image(
         scale: Optional uniform scale factor (1.0 = original size)
 
     Returns:
-        Dict[str, Any]: Dictionary with sequence information matching get_timeline_item() format
+        Dict[str, Any]: Dictionary with sequence information matching get_timeline_items() format
 
     Raises:
         ImportError: If bpy module is not available
@@ -307,7 +315,7 @@ def add_image(
     except:
         pass  # Silently ignore fit errors
     
-    # Return sequence info in same format as get_timeline_item()
+    # Return sequence info in same format as get_timeline_items()
     return {
         "name": sequence.name,
         "type": sequence.type,
@@ -339,7 +347,7 @@ def add_video(
         frame_end: Optional ending frame position. Videos can only be trimmed, not extended.
 
     Returns:
-        Dict[str, Any]: Dictionary with sequence information matching get_timeline_item() format
+        Dict[str, Any]: Dictionary with sequence information matching get_timeline_items() format
 
     Raises:
         ImportError: If bpy module is not available
@@ -399,7 +407,7 @@ def add_video(
     except:
         pass  # Silently ignore fit errors
     
-    # Return sequence info in same format as get_timeline_item()
+    # Return sequence info in same format as get_timeline_items()
     return {
         "name": sequence.name,
         "type": sequence.type,
@@ -429,7 +437,7 @@ def add_audio(
         frame_end: Optional ending frame position. Audio can only be trimmed, not extended.
 
     Returns:
-        Dict[str, Any]: Dictionary with sequence information matching get_timeline_item() format
+        Dict[str, Any]: Dictionary with sequence information matching get_timeline_items() format
 
     Raises:
         ImportError: If bpy module is not available
@@ -489,7 +497,7 @@ def add_audio(
     except:
         pass  # Silently ignore fit errors
     
-    # Return sequence info in same format as get_timeline_item()
+    # Return sequence info in same format as get_timeline_items()
     return {
         "name": sequence.name,
         "type": sequence.type,
@@ -520,7 +528,7 @@ def add_transition(
         channel: Channel for transition effect (auto-detected if None)
 
     Returns:
-        Dict[str, Any]: Dictionary with transition information matching get_timeline_item() format
+        Dict[str, Any]: Dictionary with transition information matching get_timeline_items() format
 
     Raises:
         ImportError: If bpy module is not available
@@ -615,7 +623,7 @@ def add_transition(
     except:
         pass  # Silently ignore fit errors
     
-    # Return transition info in same format as get_timeline_item()
+    # Return transition info in same format as get_timeline_items()
     return {
         "name": transition.name,
         "type": transition.type,
@@ -655,7 +663,7 @@ def add_text(
         background_color: Background color as RGBA tuple (values 0.0-1.0, default: semi-transparent black)
 
     Returns:
-        Dict[str, Any]: Dictionary with sequence information matching get_timeline_item() format
+        Dict[str, Any]: Dictionary with sequence information matching get_timeline_items() format
 
     Raises:
         ImportError: If bpy module is not available
@@ -712,7 +720,7 @@ def add_text(
     except:
         pass  # Silently ignore fit errors
     
-    # Return sequence info in same format as get_timeline_item()
+    # Return sequence info in same format as get_timeline_items()
     return {
         "name": text_sequence.name,
         "type": text_sequence.type,
@@ -742,7 +750,7 @@ def add_color(
         name: Optional sequence name (auto-generated if None)
         
     Returns:
-        Dict[str, Any]: Dictionary with sequence information matching get_timeline_item() format
+        Dict[str, Any]: Dictionary with sequence information matching get_timeline_items() format
         
     Raises:
         ImportError: If bpy module is not available
@@ -787,7 +795,7 @@ def add_color(
     except:
         pass  # Silently ignore fit errors
     
-    # Return sequence info in same format as get_timeline_item()
+    # Return sequence info in same format as get_timeline_items()
     return {
         "name": color_sequence.name,
         "type": color_sequence.type,
@@ -799,7 +807,7 @@ def add_color(
     }
 
 
-def delete_timeline_item((sequence_name: str) -> Dict[str, Any]:
+def delete_timeline_item(sequence_name: str) -> Dict[str, Any]:
     """
     Delete a sequence from the timeline by name.
     
@@ -1230,7 +1238,7 @@ def _get_updated_sequence_info(target_sequence) -> Dict[str, Any]:
         target_sequence: Blender sequence object
         
     Returns:
-        Dict[str, Any]: Updated sequence information matching get_timeline_item() format
+        Dict[str, Any]: Updated sequence information matching get_timeline_items() format
     """
     # Auto-fit sequencer view to show all sequences
     try:
@@ -1238,7 +1246,7 @@ def _get_updated_sequence_info(target_sequence) -> Dict[str, Any]:
     except:
         pass  # Silently ignore fit errors
     
-    # Return updated sequence info in same format as get_timeline_item()
+    # Return updated sequence info in same format as get_timeline_items()
     transform_data, original_res, is_resized = _get_sequence_transform_info(target_sequence)
     
     result = {
@@ -1284,7 +1292,7 @@ def modify_image(
         rotation: Optional rotation angle in radians
         
     Returns:
-        Dict[str, Any]: Updated sequence information matching get_timeline_item() format
+        Dict[str, Any]: Updated sequence information matching get_timeline_items() format
         
     Raises:
         ImportError: If bpy module is not available
@@ -1338,7 +1346,7 @@ def modify_video(
         speed: Optional playback speed multiplier (0.1-10.0, where 1.0 = normal speed)
         
     Returns:
-        Dict[str, Any]: Updated sequence information matching get_timeline_item() format
+        Dict[str, Any]: Updated sequence information matching get_timeline_items() format
         
     Raises:
         ImportError: If bpy module is not available
@@ -1399,7 +1407,7 @@ def duplicate_timeline_element(
         new_name: Optional name for the duplicate (auto-generated if None)
         
     Returns:
-        Dict[str, Any]: Dictionary with duplicated sequence information matching get_timeline_item() format
+        Dict[str, Any]: Dictionary with duplicated sequence information matching get_timeline_items() format
         
     Raises:
         ImportError: If bpy module is not available
@@ -1584,7 +1592,7 @@ def duplicate_timeline_element(
     except:
         pass  # Silently ignore fit errors
     
-    # Return sequence info in same format as get_timeline_item()
+    # Return sequence info in same format as get_timeline_items()
     transform_data, original_res, is_resized = _get_sequence_transform_info(duplicate_sequence)
     
     return {
@@ -1622,7 +1630,7 @@ def modify_audio(
         pan: Optional stereo panning (-inf to +inf, 0.0 is center, only for mono sources)
         
     Returns:
-        Dict[str, Any]: Updated sequence information matching get_timeline_item() format
+        Dict[str, Any]: Updated sequence information matching get_timeline_items() format
         
     Raises:
         ImportError: If bpy module is not available
@@ -1701,7 +1709,7 @@ def modify_audio(
     except:
         pass  # Silently ignore fit errors
     
-    # Return updated sequence info in same format as get_timeline_item()
+    # Return updated sequence info in same format as get_timeline_items()
     return {
         "name": target_sequence.name,
         "type": target_sequence.type,
@@ -1713,6 +1721,256 @@ def modify_audio(
         "volume": getattr(target_sequence, 'volume', None),
         "pan": getattr(target_sequence, 'pan', None)
     }
+
+
+def blade_cut(
+    sequence_name: str,
+    cut_frame: int,
+    left_name: Optional[str] = None,
+    right_name: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Cut a video or audio sequence at a specific frame, creating two separate sequences.
+    
+    This function splits a MOVIE or SOUND sequence at the specified frame position,
+    creating two new sequences: left part (start to cut frame) and right part 
+    (cut frame to end). The original sequence is removed after successful cutting.
+    
+    Args:
+        sequence_name: Name of the sequence to cut
+        cut_frame: Frame position where to make the cut
+        left_name: Optional name for the left part (auto-generated if None)
+        right_name: Optional name for the right part (auto-generated if None)
+        
+    Returns:
+        Dict[str, Any]: Dictionary containing:
+            - success: bool - Whether the operation succeeded
+            - message: str - Success/error message
+            - original_sequence: Dict[str, Any] - Original sequence info
+            - left_sequence: Optional[Dict[str, Any]] - Left part sequence info
+            - right_sequence: Optional[Dict[str, Any]] - Right part sequence info
+            
+    Raises:
+        ImportError: If bpy module is not available
+        ValueError: If sequence is not found, wrong type, or cut frame is invalid
+        AttributeError: If sequence editor is not available
+    """
+    import bpy
+    
+    scene = bpy.context.scene
+    
+    if not scene.sequence_editor:
+        raise AttributeError("No sequence editor found - timeline is empty or not initialized")
+    
+    sequences = scene.sequence_editor.sequences
+    
+    # Find the sequence by name
+    original_sequence = None
+    for seq in sequences:
+        if seq.name == sequence_name:
+            original_sequence = seq
+            break
+    
+    if original_sequence is None:
+        raise ValueError(f"Sequence '{sequence_name}' not found")
+    
+    # Check if sequence type is supported for cutting
+    if original_sequence.type not in ['MOVIE', 'SOUND']:
+        raise ValueError(
+            f"Sequence '{sequence_name}' has type '{original_sequence.type}'. "
+            f"Blade cutting only supports MOVIE and SOUND sequences."
+        )
+    
+    # Validate cut frame position
+    seq_start = int(original_sequence.frame_start)
+    seq_end = int(original_sequence.frame_final_end)
+    cut_frame = int(cut_frame)
+    
+    if cut_frame <= seq_start:
+        raise ValueError(f"Cut frame ({cut_frame}) must be after sequence start ({seq_start})")
+    if cut_frame >= seq_end:
+        raise ValueError(f"Cut frame ({cut_frame}) must be before sequence end ({seq_end})")
+    
+    # Store original sequence info before modification
+    original_info = {
+        "name": original_sequence.name,
+        "type": original_sequence.type,
+        "channel": original_sequence.channel,
+        "frame_start": original_sequence.frame_start,
+        "frame_end": original_sequence.frame_final_end,
+        "duration": original_sequence.frame_final_duration,
+        "filepath": _get_sequence_filepath(original_sequence)
+    }
+    
+    # Generate names for left and right parts if not provided
+    if left_name is None:
+        left_name = f"{sequence_name}_L"
+        counter = 1
+        while any(seq.name == left_name for seq in sequences):
+            counter += 1
+            left_name = f"{sequence_name}_L{counter:02d}" if counter > 1 else f"{sequence_name}_L"
+    
+    if right_name is None:
+        right_name = f"{sequence_name}_R"  
+        counter = 1
+        while any(seq.name == right_name for seq in sequences):
+            counter += 1
+            right_name = f"{sequence_name}_R{counter:02d}" if counter > 1 else f"{sequence_name}_R"
+    
+    try:
+        # Get original sequence properties
+        original_channel = int(original_sequence.channel)
+        original_filepath = _get_sequence_filepath(original_sequence)
+        
+        if original_filepath is None:
+            raise ValueError(f"Cannot cut sequence '{sequence_name}': filepath not found")
+        
+        # Create left part (start to cut_frame)
+        left_sequence = None
+        if original_sequence.type == 'MOVIE':
+            fit_method = getattr(original_sequence, 'fit_method', 'ORIGINAL')
+            left_sequence = sequences.new_movie(
+                name=left_name,
+                filepath=original_filepath,
+                channel=original_channel,
+                frame_start=seq_start,
+                fit_method=fit_method
+            )
+            # Trim to cut frame
+            left_sequence.frame_final_end = cut_frame
+            
+        elif original_sequence.type == 'SOUND':
+            left_sequence = sequences.new_sound(
+                name=left_name,
+                filepath=original_filepath,
+                channel=original_channel,
+                frame_start=seq_start
+            )
+            # Trim to cut frame
+            left_sequence.frame_final_end = cut_frame
+        
+        # Create right part (cut_frame to end)
+        right_sequence = None
+        if original_sequence.type == 'MOVIE':
+            fit_method = getattr(original_sequence, 'fit_method', 'ORIGINAL')
+            right_sequence = sequences.new_movie(
+                name=right_name,
+                filepath=original_filepath,
+                channel=original_channel,
+                frame_start=cut_frame,
+                fit_method=fit_method
+            )
+            # Trim to original end
+            original_duration = seq_end - seq_start
+            right_duration = seq_end - cut_frame
+            if right_sequence.frame_final_duration > right_duration:
+                right_sequence.frame_final_end = seq_end
+                
+        elif original_sequence.type == 'SOUND':
+            right_sequence = sequences.new_sound(
+                name=right_name,
+                filepath=original_filepath,
+                channel=original_channel,
+                frame_start=cut_frame
+            )
+            # Trim to original end
+            right_duration = seq_end - cut_frame
+            if right_sequence.frame_final_duration > right_duration:
+                right_sequence.frame_final_end = seq_end
+        
+        # Copy properties from original to both parts
+        if left_sequence and right_sequence:
+            # Copy transform properties if available
+            if (hasattr(original_sequence, 'transform') and 
+                hasattr(left_sequence, 'transform') and 
+                hasattr(right_sequence, 'transform')):
+                
+                orig_transform = original_sequence.transform
+                
+                # Copy to left sequence
+                left_transform = left_sequence.transform
+                left_transform.scale_x = orig_transform.scale_x
+                left_transform.scale_y = orig_transform.scale_y
+                left_transform.offset_x = orig_transform.offset_x
+                left_transform.offset_y = orig_transform.offset_y
+                left_transform.rotation = orig_transform.rotation
+                
+                # Copy to right sequence
+                right_transform = right_sequence.transform
+                right_transform.scale_x = orig_transform.scale_x
+                right_transform.scale_y = orig_transform.scale_y
+                right_transform.offset_x = orig_transform.offset_x
+                right_transform.offset_y = orig_transform.offset_y
+                right_transform.rotation = orig_transform.rotation
+            
+            # Copy audio properties if available
+            if original_sequence.type == 'SOUND':
+                if hasattr(original_sequence, 'volume'):
+                    left_sequence.volume = original_sequence.volume
+                    right_sequence.volume = original_sequence.volume
+                if hasattr(original_sequence, 'pan'):
+                    left_sequence.pan = original_sequence.pan
+                    right_sequence.pan = original_sequence.pan
+            
+            # Copy video speed properties if available
+            if (original_sequence.type == 'MOVIE' and 
+                hasattr(original_sequence, 'speed_factor')):
+                if hasattr(left_sequence, 'speed_factor'):
+                    left_sequence.speed_factor = original_sequence.speed_factor
+                if hasattr(right_sequence, 'speed_factor'):
+                    right_sequence.speed_factor = original_sequence.speed_factor
+        
+        # Remove the original sequence
+        sequences.remove(original_sequence)
+        
+        # Auto-fit sequencer view to show all sequences
+        try:
+            fit_sequencer_view()
+        except:
+            pass  # Silently ignore fit errors
+        
+        # Get info for the created sequences
+        left_info = None
+        right_info = None
+        
+        if left_sequence:
+            left_info = {
+                "name": left_sequence.name,
+                "type": left_sequence.type,
+                "channel": left_sequence.channel,
+                "frame_start": left_sequence.frame_start,
+                "frame_end": left_sequence.frame_final_end,
+                "duration": left_sequence.frame_final_duration,
+                "filepath": _get_sequence_filepath(left_sequence)
+            }
+        
+        if right_sequence:
+            right_info = {
+                "name": right_sequence.name,
+                "type": right_sequence.type,
+                "channel": right_sequence.channel,
+                "frame_start": right_sequence.frame_start,
+                "frame_end": right_sequence.frame_final_end,
+                "duration": right_sequence.frame_final_duration,
+                "filepath": _get_sequence_filepath(right_sequence)
+            }
+        
+        return {
+            "success": True,
+            "message": f"Successfully cut sequence '{sequence_name}' at frame {cut_frame} into '{left_name}' and '{right_name}'",
+            "original_sequence": original_info,
+            "left_sequence": left_info,
+            "right_sequence": right_info
+        }
+        
+    except Exception as e:
+        return {
+            "success": False,
+            "message": f"Failed to cut sequence '{sequence_name}': {str(e)}",
+            "original_sequence": original_info,
+            "left_sequence": None,
+            "right_sequence": None
+        }
 
 
 def detach_audio_from_video(

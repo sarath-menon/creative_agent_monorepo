@@ -1,4 +1,4 @@
-.PHONY: build dev clean install-air help
+.PHONY: build dev clean install-air help update-blender-init
 
 # Variables
 BINARY_NAME=mix
