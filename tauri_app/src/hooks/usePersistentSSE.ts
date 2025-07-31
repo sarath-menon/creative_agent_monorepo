@@ -18,6 +18,7 @@ export type PersistentSSEState = {
   finalContent: string | null;
   completed: boolean;
   processing: boolean; // True when processing a message
+  startTime?: number; // When message processing started
   isPaused: boolean; // True when session is paused
 };
 
@@ -213,6 +214,7 @@ export function usePersistentSSE(sessionId: string): PersistentSSEHook {
       ...prev,
       error: null,
       toolCalls: [],
+      startTime: Date.now(),
       finalContent: null,
       completed: false,
       processing: true, // Mark as processing when sending message

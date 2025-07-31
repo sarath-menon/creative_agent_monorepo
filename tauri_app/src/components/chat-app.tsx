@@ -25,6 +25,7 @@ import {
 } from '@/components/ui/kibo-ui/ai/tool';
 import { FolderIcon } from 'lucide-react';
 import { type FormEventHandler, useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { safeTrackEvent } from '@/lib/posthog';
 import { TooltipProvider } from '@/components/ui/tooltip';
 
 import { useSession, useCreateSession } from '@/hooks/useSession';
@@ -134,6 +135,14 @@ export function ChatApp() {
   const handleSlashCommandSelect = async (command: typeof slashCommands[0]) => {
     const commandText = `/${command.name}`;
     setShowSlashCommands(false);
+    
+    // Track slash command usage with full command text
+    safeTrackEvent('slash_command_used', {
+      command_name: command.name,
+      command_text: commandText,
+      session_id: session?.id
+    });
+    
     await submitMessage(commandText);
   };
 
@@ -196,18 +205,56 @@ export function ChatApp() {
         toolCalls: convertedToolCalls.length > 0 ? convertedToolCalls : undefined
       }]);
       
+      // Track tool usage if any - with detailed information
+      if (convertedToolCalls.length > 0) {
+        safeTrackEvent('tools_used', {
+          session_id: session?.id,
+          tool_count: convertedToolCalls.length,
+          tools: convertedToolCalls.map(t => t.name),
+          tool_details: convertedToolCalls.map(t => ({
+            name: t.name,
+            description: t.description,
+            parameters: t.parameters,
+            status: t.status,
+            has_result: !!t.result,
+            has_error: !!t.error
+          })),
+          message_response_length: sseStream.finalContent!.length
+        });
+      }
+      
+      // Track response received with full content
+      safeTrackEvent('response_received', {
+        session_id: session?.id,
+        response_length: sseStream.finalContent!.length,
+        response_content: sseStream.finalContent, // Track the full response content
+        processing_time_ms: Date.now() - (sseStream.startTime || Date.now()),
+        tool_count: convertedToolCalls.length,
+        timestamp: new Date().toISOString()
+      });
+      
       // Reset interrupted message guard when processing completes
       interruptedMessageAddedRef.current = false;
     }
-  }, [sseStream.completed, sseStream.finalContent, sseStream.processing]);
+  }, [sseStream.completed, sseStream.finalContent, sseStream.processing, session?.id]);
 
   // Handle streaming errors
   useEffect(() => {
     if (sseStream.error) {
       const errorMessage = `Failed to send prompt: ${sseStream.error}`;
       setMessages(prev => [...prev, { content: errorMessage, from: 'assistant' }]);
+      
+      // Track error occurrence with full details
+      safeTrackEvent('error_occurred', {
+        session_id: session?.id,
+        error_message: sseStream.error,
+        error_type: 'streaming_error',
+        last_user_message: messages.find(m => m.from === 'user')?.content || '',
+        timestamp: new Date().toISOString(),
+        tools_in_progress: sseStream.toolCalls.map(t => t.name).join(', ')
+      });
     }
-  }, [sseStream.error]);
+  }, [sseStream.error, session?.id]);
 
   // Handle pause state changes - simplified since pausing is not implemented
   // (Keeping this for compatibility but it won't trigger since isPaused will always be false)
@@ -231,6 +278,17 @@ export function ChatApp() {
     
     // Reset interrupted message guard for new message
     interruptedMessageAddedRef.current = false;
+    
+    // Track message submission event with full content
+    safeTrackEvent('message_submitted', {
+      message_length: messageText.length,
+      message_content: messageText, // Track the full message content
+      has_media: files.length > 0,
+      media_count: files.length > 0 ? files.length : 0,
+      session_id: session?.id,
+      has_file_references: referenceMap.size > 0,
+      timestamp: new Date().toISOString()
+    });
     
     // Send message via persistent SSE
     try {
@@ -264,6 +322,14 @@ export function ChatApp() {
     setText('');
     clearFiles();
     interruptedMessageAddedRef.current = false;
+    
+    // Track new session creation with more details
+    safeTrackEvent('session_created', {
+      session_id: session?.id,
+      creation_time: new Date().toISOString(),
+      previous_messages_count: messages.length,
+      client_id: localStorage.getItem('client_id') || 'unknown'
+    });
   };
 
   // Calculate submit button status and disabled state
