@@ -159,8 +159,10 @@ func HandleSSEStream(ctx context.Context, handler *api.QueryHandler, w http.Resp
 
 // MessageContent represents the JSON structure sent from frontend
 type MessageContent struct {
-	Text  string   `json:"text"`
-	Media []string `json:"media,omitempty"`
+	Text     string   `json:"text"`
+	Media    []string `json:"media,omitempty"`
+	Apps     []string `json:"apps,omitempty"`
+	PlanMode bool     `json:"plan_mode,omitempty"`
 }
 
 // extractText parses JSON content to extract the actual text value
@@ -217,7 +219,14 @@ func handleShellCommand(ctx context.Context, w http.ResponseWriter, flusher http
 
 // handleRegularMessage processes regular messages through the agent
 func handleRegularMessage(ctx context.Context, handler *api.QueryHandler, w http.ResponseWriter, flusher http.Flusher, sessionID, content string) error {
-	events, err := handler.GetApp().CoderAgent.Run(ctx, sessionID, content)
+	msgContent, err := parseMessageContent(content)
+	if err != nil {
+		WriteSSE(w, "error", ErrorEvent{Error: fmt.Sprintf("Failed to parse message: %s", err.Error())})
+		flusher.Flush()
+		return nil
+	}
+	
+	events, err := handler.GetApp().CoderAgent.RunWithPlanMode(ctx, sessionID, content, msgContent.PlanMode)
 	if err != nil {
 		WriteSSE(w, "error", ErrorEvent{Error: fmt.Sprintf("Failed to start agent: %s", err.Error())})
 		flusher.Flush()

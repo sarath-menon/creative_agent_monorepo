@@ -49,6 +49,7 @@ type Service interface {
 	pubsub.Suscriber[AgentEvent]
 	Model() models.Model
 	Run(ctx context.Context, sessionID string, content string, attachments ...message.Attachment) (<-chan AgentEvent, error)
+	RunWithPlanMode(ctx context.Context, sessionID string, content string, planMode bool, attachments ...message.Attachment) (<-chan AgentEvent, error)
 	Cancel(sessionID string)
 	IsSessionBusy(sessionID string) bool
 	IsBusy() bool
@@ -196,6 +197,10 @@ func (a *agent) err(err error) AgentEvent {
 }
 
 func (a *agent) Run(ctx context.Context, sessionID string, content string, attachments ...message.Attachment) (<-chan AgentEvent, error) {
+	return a.RunWithPlanMode(ctx, sessionID, content, false, attachments...)
+}
+
+func (a *agent) RunWithPlanMode(ctx context.Context, sessionID string, content string, planMode bool, attachments ...message.Attachment) (<-chan AgentEvent, error) {
 	if !a.provider.Model().SupportsAttachments && attachments != nil {
 		attachments = nil
 	}
@@ -205,6 +210,11 @@ func (a *agent) Run(ctx context.Context, sessionID string, content string, attac
 	if _, loaded := a.activeRequests.LoadOrStore(sessionID, cancel); loaded {
 		cancel() // Clean up unused cancel function
 		return nil, ErrSessionBusy
+	}
+
+	// Add plan mode to context
+	if planMode {
+		genCtx = context.WithValue(genCtx, "plan_mode", true)
 	}
 
 	// Subscribe to agent events for real-time streaming
@@ -218,7 +228,7 @@ func (a *agent) Run(ctx context.Context, sessionID string, content string, attac
 			close(events)
 		}()
 
-		logging.Debug("Request started", "sessionID", sessionID)
+		logging.Debug("Request started", "sessionID", sessionID, "planMode", planMode)
 		defer logging.RecoverPanic("agent.Run", func() {
 			events <- a.err(fmt.Errorf("panic while running the agent"))
 		})
@@ -350,7 +360,14 @@ func (a *agent) processGeneration(ctx context.Context, sessionID, content string
 }
 
 func (a *agent) createUserMessage(ctx context.Context, sessionID, content string, attachmentParts []message.ContentPart) (message.Message, error) {
-	parts := []message.ContentPart{message.TextContent{Text: content}}
+	// Check if plan mode is active and append system-reminder
+	messageContent := content
+	if ctx.Value("plan_mode") != nil {
+		planModeContent := prompt.LoadPrompt("plan_mode")
+		messageContent = content + "\n\n<system-reminder>\n" + planModeContent + "\n</system-reminder>"
+	}
+	
+	parts := []message.ContentPart{message.TextContent{Text: messageContent}}
 	parts = append(parts, attachmentParts...)
 	return a.messages.Create(ctx, sessionID, message.CreateMessageParams{
 		Role:  message.User,
@@ -360,7 +377,14 @@ func (a *agent) createUserMessage(ctx context.Context, sessionID, content string
 
 func (a *agent) streamAndHandleEvents(ctx context.Context, sessionID string, msgHistory []message.Message) (message.Message, *message.Message, error) {
 	ctx = context.WithValue(ctx, tools.SessionIDContextKey, sessionID)
-	eventChan := a.provider.StreamResponse(ctx, msgHistory, a.tools)
+	
+	// Filter tools based on plan mode
+	availableTools := a.tools
+	if ctx.Value("plan_mode") != nil {
+		availableTools = filterToolsForPlanMode(a.tools)
+	}
+	
+	eventChan := a.provider.StreamResponse(ctx, msgHistory, availableTools)
 
 	assistantMsg, err := a.messages.Create(ctx, sessionID, message.CreateMessageParams{
 		Role:  message.Assistant,
@@ -417,6 +441,16 @@ func (a *agent) streamAndHandleEvents(ctx context.Context, sessionID string, msg
 				toolResults[i] = message.ToolResult{
 					ToolCallID: toolCall.ID,
 					Content:    fmt.Sprintf("Tool not found: %s", toolCall.Name),
+					IsError:    true,
+				}
+				continue
+			}
+			
+			// Check if tool is available in plan mode
+			if ctx.Value("plan_mode") != nil && !isToolAllowedInPlanMode(tool) {
+				toolResults[i] = message.ToolResult{
+					ToolCallID: toolCall.ID,
+					Content:    "Tool not available in plan mode. Use exit_plan_mode to proceed with execution.",
 					IsError:    true,
 				}
 				continue
@@ -780,6 +814,35 @@ func (a *agent) Summarize(ctx context.Context, sessionID string) error {
 	return nil
 }
 
+// filterToolsForPlanMode returns only read-only and planning tools for plan mode
+func filterToolsForPlanMode(allTools []tools.BaseTool) []tools.BaseTool {
+	var planModeTools []tools.BaseTool
+	for _, tool := range allTools {
+		if isToolAllowedInPlanMode(tool) {
+			planModeTools = append(planModeTools, tool)
+		}
+	}
+	return planModeTools
+}
+
+// isToolAllowedInPlanMode checks if a tool is allowed in plan mode
+func isToolAllowedInPlanMode(tool tools.BaseTool) bool {
+	toolName := tool.Info().Name
+	
+	// Allow read-only and planning tools
+	allowedTools := map[string]bool{
+		"view":           true,
+		"ls":             true,
+		"grep":           true,
+		"glob":           true,
+		"todo_write":     true,
+		"exit_plan_mode": true,
+		"fetch":          true,
+	}
+	
+	return allowedTools[toolName]
+}
+
 func createAgentProvider(agentName config.AgentName) (provider.Provider, error) {
 	cfg := config.Get()
 	agentConfig, ok := cfg.Agents[agentName]
@@ -804,10 +867,11 @@ func createAgentProvider(agentName config.AgentName) (provider.Provider, error) 
 	if agentConfig.MaxTokens > 0 {
 		maxTokens = agentConfig.MaxTokens
 	}
+	systemPrompt := prompt.GetAgentPrompt(agentName, model.Provider)
 	opts := []provider.ProviderClientOption{
 		provider.WithAPIKey(providerCfg.APIKey),
 		provider.WithModel(model),
-		provider.WithSystemMessage(prompt.GetAgentPrompt(agentName, model.Provider)),
+		provider.WithSystemMessage(systemPrompt),
 		provider.WithMaxTokens(maxTokens),
 	}
 	if model.Provider == models.ProviderOpenAI || model.Provider == models.ProviderLocal && model.CanReason {

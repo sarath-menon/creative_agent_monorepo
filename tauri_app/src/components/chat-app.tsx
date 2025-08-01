@@ -12,7 +12,6 @@ import {
   AIInputTools,
 } from '@/components/ui/kibo-ui/ai/input';
 import { AIMessage, AIMessageContent } from '@/components/ui/kibo-ui/ai/message';
-import { AIResponse } from '@/components/ui/kibo-ui/ai/response';
 import {
   AITool,
   AIToolContent,
@@ -44,6 +43,8 @@ import { CommandSlash, shouldShowSlashCommands, handleSlashCommandNavigation, sl
 import { ResponseRenderer } from './response-renderer';
 import { MessageAttachmentDisplay } from './message-attachment-display';
 import { TodoList } from './todo-list';
+import { PlanDisplay } from './plan-display';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 
 type ToolCall = {
@@ -77,9 +78,27 @@ const extractTodosFromToolCalls = (toolCalls: any[]) => {
     .flat();
 };
 
-// Helper function to filter out todo_write tools from toolCalls (works with both ToolCall and SSE formats)
-const filterNonTodoTools = (toolCalls: any[]) => {
-  return toolCalls.filter(tc => tc.name !== 'todo_write');
+// Helper function to extract plan content from exit_plan_mode tool calls (works with both ToolCall and SSE formats)
+const extractPlanFromToolCalls = (toolCalls: any[]) => {
+  const planTool = toolCalls.find(tc => tc.name === 'exit_plan_mode');
+  if (!planTool) return '';
+  
+  try {
+    return planTool.parameters?.plan || '';
+  } catch {
+    return '';
+  }
+};
+
+// Helper function to filter out special tools (todo_write, exit_plan_mode) from toolCalls
+const filterNonSpecialTools = (toolCalls: any[]) => {
+  return toolCalls.filter(tc => tc.name !== 'todo_write' && tc.name !== 'exit_plan_mode');
+};
+
+
+// Helper function to check if a message contains exit_plan_mode tool call
+const hasExitPlanModeTool = (toolCalls: any[]) => {
+  return toolCalls?.some(tc => tc.name === 'exit_plan_mode') || false;
 };
 
 
@@ -90,6 +109,8 @@ export function ChatApp() {
   const [selectedCommandIndex, setSelectedCommandIndex] = useState(0);
   const [inputElement, setInputElement] = useState<HTMLTextAreaElement | null>(null);
   const [showCommands, setShowCommands] = useState(false);
+  const [isPlanMode, setIsPlanMode] = useState(false);
+  const [showPlanOptions, setShowPlanOptions] = useState<number | null>(null);
   const interruptedMessageAddedRef = useRef(false);
 
 
@@ -212,6 +233,13 @@ export function ChatApp() {
 
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // Handle Shift+Tab for plan mode toggle
+    if (e.key === 'Tab' && e.shiftKey) {
+      e.preventDefault();
+      setIsPlanMode(prev => !prev);
+      return;
+    }
+
     // Handle Cmd+Enter for form submission (fallback)
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
       e.preventDefault();
@@ -251,7 +279,7 @@ export function ChatApp() {
 
   // Handle completion of streaming
   useEffect(() => {
-    if (sseStream.completed && sseStream.finalContent && !sseStream.processing) {
+    if (sseStream.completed && (sseStream.finalContent || sseStream.toolCalls.length > 0) && !sseStream.processing) {
       // Convert SSE tool calls to our Message format
       const convertedToolCalls: ToolCall[] = sseStream.toolCalls.map(tc => ({
         name: tc.name,
@@ -262,11 +290,20 @@ export function ChatApp() {
         error: tc.error,
       }));
       
-      setMessages(prev => [...prev, { 
-        content: sseStream.finalContent!, 
-        from: 'assistant',
-        toolCalls: convertedToolCalls.length > 0 ? convertedToolCalls : undefined
-      }]);
+      setMessages(prev => {
+        const newMessages = [...prev, { 
+          content: sseStream.finalContent!, 
+          from: 'assistant',
+          toolCalls: convertedToolCalls.length > 0 ? convertedToolCalls : undefined
+        }];
+        
+        // Check if this message contains an exit_plan_mode tool and show options
+        if (hasExitPlanModeTool(convertedToolCalls)) {
+          setShowPlanOptions(newMessages.length - 1);
+        }
+        
+        return newMessages;
+      });
       
       // Reset interrupted message guard when processing completes
       interruptedMessageAddedRef.current = false;
@@ -291,7 +328,7 @@ export function ChatApp() {
   // Handle pause state changes - simplified since pausing is not implemented
   // (Keeping this for compatibility but it won't trigger since isPaused will always be false)
 
-  const submitMessage = async (messageText: string) => {
+  const submitMessage = async (messageText: string, overridePlanMode?: boolean) => {
     if (!messageText || !session?.id || !sseStream.connected) {
       return;
     }
@@ -307,6 +344,7 @@ export function ChatApp() {
     }]);
     setText('');
     clearAttachments();
+    setShowPlanOptions(null); // Clear any shown plan options
     
     // Reset interrupted message guard for new message
     interruptedMessageAddedRef.current = false;
@@ -319,7 +357,8 @@ export function ChatApp() {
       const messageData = {
         text: expandedText,
         media: attachments.filter(a => a.path).map(a => a.path),
-        apps: attachments.filter(a => a.type === 'app').map(app => app.name)
+        apps: attachments.filter(a => a.type === 'app').map(app => app.name),
+        plan_mode: overridePlanMode !== undefined ? overridePlanMode : isPlanMode
       };
       await sseStream.sendMessage(JSON.stringify(messageData));
     } catch (error) {
@@ -344,6 +383,18 @@ export function ChatApp() {
     setText('');
     clearAttachments();
     interruptedMessageAddedRef.current = false;
+    setShowPlanOptions(null);
+  };
+
+  // Handle plan option button clicks
+  const handlePlanProceed = (messageIndex: number) => {
+    setIsPlanMode(false);
+    setShowPlanOptions(null);
+    submitMessage("Proceed with implementing the plan you just created. Begin implementation now.", false);
+  };
+
+  const handlePlanKeepPlanning = (messageIndex: number) => {
+    setShowPlanOptions(null);
   };
 
   // Calculate submit button status and disabled state
@@ -395,15 +446,24 @@ export function ChatApp() {
                         <TodoList todos={extractTodosFromToolCalls(message.toolCalls)} />
                       </div>
                     )}
-                    {/* Render non-todo tools in ladder */}
-                    {filterNonTodoTools(message.toolCalls).length > 0 && (
+                    {/* Render plan content */}
+                    {extractPlanFromToolCalls(message.toolCalls) && (
+                      <PlanDisplay 
+                        planContent={extractPlanFromToolCalls(message.toolCalls)}
+                        showOptions={showPlanOptions === index}
+                        onProceed={() => handlePlanProceed(index)}
+                        onKeepPlanning={() => handlePlanKeepPlanning(index)}
+                      />
+                    )}
+                    {/* Render non-special tools in ladder */}
+                    {filterNonSpecialTools(message.toolCalls).length > 0 && (
                       <AIToolLadder className="mt-4">
-                        {filterNonTodoTools(message.toolCalls).map((toolCall, toolIndex) => (
+                        {filterNonSpecialTools(message.toolCalls).map((toolCall, toolIndex) => (
                           <AIToolStep
                             key={`${index}-${toolCall.name}-${toolIndex}`}
                             status={toolCall.status}
                             stepNumber={toolIndex + 1}
-                            isLast={toolIndex === filterNonTodoTools(message.toolCalls).length - 1}
+                            isLast={toolIndex === filterNonSpecialTools(message.toolCalls).length - 1}
                           >
                             <AIToolHeader
                               description={toolCall.description}
@@ -421,7 +481,9 @@ export function ChatApp() {
             </AIMessage>
           ))}
           {sseStream.processing && (
-            <AIMessage from="assistant">
+            <AIMessage 
+              from="assistant"
+            >
               <AIMessageContent>
                 {sseStream.toolCalls.length > 0 ? (
                   <>
@@ -431,15 +493,22 @@ export function ChatApp() {
                         <TodoList todos={extractTodosFromToolCalls(sseStream.toolCalls)} />
                       </div>
                     )}
-                    {/* Render streaming non-todo tools in ladder */}
-                    {filterNonTodoTools(sseStream.toolCalls).length > 0 && (
+                    {/* Render streaming plan content */}
+                    {extractPlanFromToolCalls(sseStream.toolCalls) && (
+                      <PlanDisplay 
+                        planContent={extractPlanFromToolCalls(sseStream.toolCalls)}
+                        showOptions={false}
+                      />
+                    )}
+                    {/* Render streaming non-special tools in ladder */}
+                    {filterNonSpecialTools(sseStream.toolCalls).length > 0 && (
                       <AIToolLadder >
-                        {filterNonTodoTools(sseStream.toolCalls).map((toolCall, toolIndex) => (
+                        {filterNonSpecialTools(sseStream.toolCalls).map((toolCall, toolIndex) => (
                           <AIToolStep
                             key={`streaming-${toolCall.id}-${toolIndex}`}
                             status={toolCall.status}
                             stepNumber={toolIndex + 1}
-                            isLast={toolIndex === filterNonTodoTools(sseStream.toolCalls).length - 1}
+                            isLast={toolIndex === filterNonSpecialTools(sseStream.toolCalls).length - 1}
                           >
                             <AIToolHeader
                               description={toolCall.description}
@@ -516,6 +585,20 @@ export function ChatApp() {
             />
           </AIInputToolbar>
         </AIInput>
+        
+        {/* Mode Selector */}
+        <div className="absolute bottom-1 left-1">
+          <Select
+          value={isPlanMode ? 'plan' : 'edit'} onValueChange={(value) => setIsPlanMode(value === 'plan')}>
+            <SelectTrigger size="sm" className="text-muted-foreground border-none bg-transparent dark:bg-transparent hover:bg-transparent  hover:dark:bg-transparent focus:ring-0 focus:border-none">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="edit">create</SelectItem>
+              <SelectItem value="plan">plan</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
         </div>
         
         {/* Unified Command System */}
