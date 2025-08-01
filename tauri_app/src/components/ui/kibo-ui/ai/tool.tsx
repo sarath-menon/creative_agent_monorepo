@@ -85,13 +85,34 @@ export const AIToolHeader = ({
   </CollapsibleTrigger>
 );
 
-export type AIToolContentProps = ComponentProps<typeof CollapsibleContent>;
+export type AIToolContentProps = ComponentProps<typeof CollapsibleContent> & {
+  toolCall?: {
+    name: string;
+    parameters: Record<string, unknown>;
+    result?: string;
+    error?: string;
+  };
+};
 
-export const AIToolContent = ({ className, ...props }: AIToolContentProps) => (
+
+export const AIToolContent = ({ className, toolCall, children, ...props }: AIToolContentProps) => (
   <CollapsibleContent
     className={cn('grid gap-4 overflow-x-auto border-t p-4 text-sm', className)}
     {...props}
-  />
+  >
+    {toolCall && (
+      <>
+        <AIToolParameters parameters={toolCall.parameters} />
+        {(toolCall.result || toolCall.error) && (
+          <AIToolResult
+            error={toolCall.error}
+            result={toolCall.result}
+          />
+        )}
+      </>
+    )}
+    {children}
+  </CollapsibleContent>
 );
 
 export type AIToolParametersProps = ComponentProps<'div'> & {

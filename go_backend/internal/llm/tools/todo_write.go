@@ -46,41 +46,38 @@ func (t *todoWriteTool) Info() ToolInfo {
 	return ToolInfo{
 		Name:        "todo_write",
 		Description: LoadToolDescription("todo_write"),
-		Parameters: map[string]interface{}{
-			"type": "object",
-			"properties": map[string]interface{}{
-				"todos": map[string]interface{}{
-					"type":        "array",
-					"description": "Array of todo items to manage",
-					"items": map[string]interface{}{
-						"type": "object",
-						"properties": map[string]interface{}{
-							"id": map[string]interface{}{
-								"type":        "string",
-								"description": "Unique identifier for the todo item",
-							},
-							"content": map[string]interface{}{
-								"type":        "string",
-								"description": "The todo task description",
-								"minLength":   1,
-							},
-							"status": map[string]interface{}{
-								"type":        "string",
-								"description": "Current status of the todo item",
-								"enum":        []string{"pending", "in_progress", "completed"},
-							},
-							"priority": map[string]interface{}{
-								"type":        "string",
-								"description": "Priority level of the todo item",
-								"enum":        []string{"high", "medium", "low"},
-							},
+		Parameters: map[string]any{
+			"todos": map[string]any{
+				"type":        "array",
+				"description": "Array of todo items to manage",
+				"items": map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"id": map[string]any{
+							"type":        "string",
+							"description": "Unique identifier for the todo item",
 						},
-						"required": []string{"id", "content", "status", "priority"},
+						"content": map[string]any{
+							"type":        "string",
+							"description": "The todo task description",
+							"minLength":   1,
+						},
+						"status": map[string]any{
+							"type":        "string",
+							"description": "Current status of the todo item",
+							"enum":        []string{"pending", "in_progress", "completed"},
+						},
+						"priority": map[string]any{
+							"type":        "string",
+							"description": "Priority level of the todo item",
+							"enum":        []string{"high", "medium", "low"},
+						},
 					},
+					"required": []string{"id", "content", "status", "priority"},
 				},
 			},
-			"required": []string{"todos"},
 		},
+		Required: []string{"todos"},
 	}
 }
 

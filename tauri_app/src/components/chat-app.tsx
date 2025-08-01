@@ -43,6 +43,7 @@ import { AttachmentPreview } from './attachment-preview';
 import { CommandSlash, shouldShowSlashCommands, handleSlashCommandNavigation, slashCommands } from './command-slash';
 import { ResponseRenderer } from './response-renderer';
 import { MessageAttachmentDisplay } from './message-attachment-display';
+import { TodoList } from './todo-list';
 
 
 type ToolCall = {
@@ -60,6 +61,27 @@ type Message = {
   toolCalls?: ToolCall[];
   attachments?: Attachment[];
 };
+
+// Helper function to extract todos from todo_write tool calls (works with both ToolCall and SSE formats)
+const extractTodosFromToolCalls = (toolCalls: any[]) => {
+  return toolCalls
+    .filter(tc => tc.name === 'todo_write')
+    .map(tc => {
+      try {
+        const todos = tc.parameters?.todos;
+        return Array.isArray(todos) ? todos : [];
+      } catch {
+        return [];
+      }
+    })
+    .flat();
+};
+
+// Helper function to filter out todo_write tools from toolCalls (works with both ToolCall and SSE formats)
+const filterNonTodoTools = (toolCalls: any[]) => {
+  return toolCalls.filter(tc => tc.name !== 'todo_write');
+};
+
 
 export function ChatApp() {
   const [text, setText] = useState<string>('');
@@ -365,32 +387,35 @@ export function ChatApp() {
                     {message.content}
                   </div>
                 )}
+                {/* Render todos inline without tool wrapper */}
                 {message.toolCalls && message.toolCalls.length > 0 && (
-                  <AIToolLadder className="mt-4">
-                    {message.toolCalls.map((toolCall, toolIndex) => (
-                      <AIToolStep
-                        key={`${index}-${toolCall.name}-${toolIndex}`}
-                        status={toolCall.status}
-                        stepNumber={toolIndex + 1}
-                        isLast={toolIndex === message.toolCalls!.length - 1}
-                      >
-                        <AIToolHeader
-                          description={toolCall.description}
-                          name={toolCall.name}
-                          status={toolCall.status}
-                        />
-                        <AIToolContent>
-                          <AIToolParameters parameters={toolCall.parameters} />
-                          {(toolCall.result || toolCall.error) && (
-                            <AIToolResult
-                              error={toolCall.error}
-                              result={toolCall.result ? <AIResponse>{toolCall.result}</AIResponse> : undefined}
+                  <>
+                    {extractTodosFromToolCalls(message.toolCalls).length > 0 && (
+                      <div className="mt-4">
+                        <TodoList todos={extractTodosFromToolCalls(message.toolCalls)} />
+                      </div>
+                    )}
+                    {/* Render non-todo tools in ladder */}
+                    {filterNonTodoTools(message.toolCalls).length > 0 && (
+                      <AIToolLadder className="mt-4">
+                        {filterNonTodoTools(message.toolCalls).map((toolCall, toolIndex) => (
+                          <AIToolStep
+                            key={`${index}-${toolCall.name}-${toolIndex}`}
+                            status={toolCall.status}
+                            stepNumber={toolIndex + 1}
+                            isLast={toolIndex === filterNonTodoTools(message.toolCalls).length - 1}
+                          >
+                            <AIToolHeader
+                              description={toolCall.description}
+                              name={toolCall.name}
+                              status={toolCall.status}
                             />
-                          )}
-                        </AIToolContent>
-                      </AIToolStep>
-                    ))}
-                  </AIToolLadder>
+                            <AIToolContent toolCall={toolCall} />
+                          </AIToolStep>
+                        ))}
+                      </AIToolLadder>
+                    )}
+                  </>
                 )}
               </AIMessageContent>
             </AIMessage>
@@ -400,31 +425,32 @@ export function ChatApp() {
               <AIMessageContent>
                 {sseStream.toolCalls.length > 0 ? (
                   <>
-                    <AIToolLadder >
-                      {sseStream.toolCalls.map((toolCall, toolIndex) => (
-                        <AIToolStep
-                          key={`streaming-${toolCall.id}-${toolIndex}`}
-                          status={toolCall.status}
-                          stepNumber={toolIndex + 1}
-                          isLast={toolIndex === sseStream.toolCalls.length - 1}
-                        >
-                          <AIToolHeader
-                            description={toolCall.description}
-                            name={toolCall.name}
+                    {/* Render streaming todos inline without tool wrapper */}
+                    {extractTodosFromToolCalls(sseStream.toolCalls).length > 0 && (
+                      <div className="mt-4">
+                        <TodoList todos={extractTodosFromToolCalls(sseStream.toolCalls)} />
+                      </div>
+                    )}
+                    {/* Render streaming non-todo tools in ladder */}
+                    {filterNonTodoTools(sseStream.toolCalls).length > 0 && (
+                      <AIToolLadder >
+                        {filterNonTodoTools(sseStream.toolCalls).map((toolCall, toolIndex) => (
+                          <AIToolStep
+                            key={`streaming-${toolCall.id}-${toolIndex}`}
                             status={toolCall.status}
-                          />
-                          <AIToolContent>
-                            <AIToolParameters parameters={toolCall.parameters} />
-                            {(toolCall.result || toolCall.error) && (
-                              <AIToolResult
-                                error={toolCall.error}
-                                result={toolCall.result ? <AIResponse>{toolCall.result}</AIResponse> : undefined}
-                              />
-                            )}
-                          </AIToolContent>
-                        </AIToolStep>
-                      ))}
-                    </AIToolLadder>
+                            stepNumber={toolIndex + 1}
+                            isLast={toolIndex === filterNonTodoTools(sseStream.toolCalls).length - 1}
+                          >
+                            <AIToolHeader
+                              description={toolCall.description}
+                              name={toolCall.name}
+                              status={toolCall.status}
+                            />
+                            <AIToolContent toolCall={toolCall} />
+                          </AIToolStep>
+                        ))}
+                      </AIToolLadder>
+                    )}
                     {!sseStream.completed && <LoadingDots />}
                   </>
                 ) : (
