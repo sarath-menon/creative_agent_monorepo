@@ -84,9 +84,9 @@ type Config struct {
 
 // Application constants
 const (
-	defaultDataDirectory = ".recreate"
+	defaultDataDirectory = ".mix"
 	defaultLogLevel      = "info"
-	appName              = "recreate"
+	appName              = "mix"
 
 	MaxTokensFallbackDefault = 4096
 )

@@ -66,17 +66,9 @@ Use `uv run python -c "import sys; sys.path.append('$<workdir>/tools/pixelmator'
 
 ### Export Operations
 
-**export_document**
-- Exports the current document to a file
-- Args: `{"output_path": "/path/to/output.png", "format": "PNG", "quality": 100}`
-- Valid formats: PNG, JPEG, TIFF, PSD, WEBP
-- Quality: 1-100 (JPEG only)
-- Returns: Export info with output_path, format, file_size, success
-
-**export_current_view**
-- Exports the current viewport view to a file
-- Args: `{"output_path": "/path/to/view.png", "format": "PNG"}`
-- Valid formats: PNG, JPEG, TIFF
+**get_screenshot**
+- Exports the current document to a JPEG file
+- Args: `{"output_path": "/path/to/output.jpg"}`
 - Returns: Export info with output_path, format, file_size, success
 
 ## Usage Examples
@@ -97,8 +89,8 @@ Use `uv run python -c "import sys; sys.path.append('$<workdir>/tools/pixelmator'
 // Create a text layer
 {"operation": "create_layer", "args": {"layer_type": "text", "name": "title", "text": "Hello World", "font_size": 64}}
 
-// Export as PNG
-{"operation": "export_document", "args": {"output_path": "/Users/user/output.png", "format": "PNG"}}
+// Export as JPEG
+{"operation": "get_screenshot", "args": {"output_path": "/Users/user/output.jpg"}}
 
 // Close document
 {"operation": "close_document", "args": {"save": false}}

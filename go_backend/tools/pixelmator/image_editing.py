@@ -262,39 +262,26 @@ def resize_document(width: int, height: int, algorithm: str = 'LANCZOS') -> Dict
     return get_document_info()
 
 
-def export_document(output_path: str, format: str = 'PNG', quality: int = 100) -> Dict[str, Any]:
+def get_screenshot(output_path: str) -> Dict[str, Any]:
     """
-    Export the current document to a file.
+    Export the current document to a JPEG file.
 
     Args:
-        output_path: Path for the exported file
-        format: Export format ('PNG', 'JPEG', 'TIFF', 'PSD', 'WEBP')
-        quality: Export quality 1-100 (JPEG only)
+        output_path: Path for the exported JPEG file
 
     Returns:
         Dict[str, Any]: Export info with output_path, format, file_size, success
 
     Raises:
-        ValueError: If format is unsupported or quality is invalid
         RuntimeError: If export fails or no document is open
     """
-    valid_formats = {'PNG', 'JPEG', 'TIFF', 'PSD', 'WEBP'}
-    if format not in valid_formats:
-        raise ValueError(f"Invalid format: {format}. Must be one of {valid_formats}")
-
-    if not (1 <= quality <= 100):
-        raise ValueError(f"Quality must be between 1-100, got: {quality}")
-
     # Ensure output directory exists
     output_dir = os.path.dirname(output_path)
     if output_dir and not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
-    # Build export script based on format
-    if format == 'JPEG':
-        script = f'tell application "Pixelmator Pro" to export front document to POSIX file "{output_path}" as JPEG with compression factor {quality / 100.0}'
-    else:
-        script = f'tell application "Pixelmator Pro" to export front document to POSIX file "{output_path}" as {format}'
+    # Export as JPEG with default quality (80%)
+    script = f'tell application "Pixelmator Pro" to export front document to POSIX file "{output_path}" as JPEG with compression factor 0.8'
 
     _run_applescript(script)
 
@@ -306,7 +293,7 @@ def export_document(output_path: str, format: str = 'PNG', quality: int = 100) -
 
     return {
         "output_path": output_path,
-        "format": format,
+        "format": "JPEG",
         "file_size": file_size,
         "success": True
     }
@@ -511,7 +498,6 @@ def delete_layer(layer_name: str, layer_index: Optional[int] = None) -> bool:
         raise RuntimeError(f"Failed to delete layer: {layer_name}") from e
 
 
-def export_current_view(output_path: str, format: str = 'PNG') -> Dict[str, Any]:
     """
     Export the current viewport view to a file.
 

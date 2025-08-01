@@ -1,8 +1,8 @@
-# Recreate Codebase Analysis
+# Mix Codebase Analysis
 
 ## Executive Summary
 
-**Recreate** is a sophisticated AI-powered assistant for general-purpose task automation and AI assistance. It provides CLI-only mode for scripting and structured data queries, along with an HTTP API for web integrations. The system is designed as a standalone tool with a clean, minimal interface that prioritizes simplicity and reliability.
+**Mix** is a sophisticated AI-powered assistant for general-purpose task automation and AI assistance. It provides CLI-only mode for scripting and structured data queries, along with an HTTP API for web integrations. The system is designed as a standalone tool with a clean, minimal interface that prioritizes simplicity and reliability.
 
 ## Project Overview
 
@@ -70,7 +70,7 @@ sessions (conversations)
 
 ## CLI Data Query Interface
 
-Recreate provides a powerful structured data access system through its CLI interface that enables programmatic interaction with sessions, tools, and system state. This command-line API is designed for seamless integration with native applications and scripts.
+Mix provides a powerful structured data access system through its CLI interface that enables programmatic interaction with sessions, tools, and system state. This command-line API is designed for seamless integration with native applications and scripts.
 
 ### CLI Query Interface
 
@@ -92,7 +92,7 @@ Get structured JSON data directly via stdout:
 
 ### HTTP Server Interface
 
-Recreate also provides an HTTP JSON-RPC server for web-based integrations:
+Mix also provides an HTTP JSON-RPC server for web-based integrations:
 
 ```bash
 # Start HTTP server on default port (localhost:8080)
@@ -231,7 +231,7 @@ echo '{"method": "sessions.delete", "params": {"id": "session-uuid"}, "id": 1}' 
 ./build/mix --query json --output-format json
 ```
 
-Both CLI and HTTP interfaces provide full 2-way communication for session management, enabling programmatic control of Recreate from external applications or scripts. The HTTP interface offers better performance for web-based integrations, while the CLI interface is ideal for shell scripts and simple integrations.
+Both CLI and HTTP interfaces provide full 2-way communication for session management, enabling programmatic control of Mix from external applications or scripts. The HTTP interface offers better performance for web-based integrations, while the CLI interface is ideal for shell scripts and simple integrations.
 
 ### Query Response Formats
 

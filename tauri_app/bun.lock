@@ -2,7 +2,7 @@
   "lockfileVersion": 1,
   "workspaces": {
     "": {
-      "name": "recreate_tauri_app",
+      "name": "mix_tauri_app",
       "dependencies": {
         "@icons-pack/react-simple-icons": "^13.6.0",
         "@radix-ui/react-avatar": "^1.1.10",

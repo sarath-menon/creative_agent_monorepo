@@ -114,7 +114,7 @@ func (m *MCPClientManager) GetClient(ctx context.Context, serverName string, mcp
 	initRequest := mcp.InitializeRequest{}
 	initRequest.Params.ProtocolVersion = mcp.LATEST_PROTOCOL_VERSION
 	initRequest.Params.ClientInfo = mcp.Implementation{
-		Name:    "Recreate",
+		Name:    "Mix",
 		Version: version.Version,
 	}
 
