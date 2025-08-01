@@ -202,7 +202,7 @@ pub fn run() {
             {
                 let ns_window = window.ns_window().unwrap();
                 unsafe {
-                    let bg_color = NSColor::colorWithRed_green_blue_alpha(41.0/ 255.0, 37.0/ 255.0, 36.0/ 255.0, 1.0);
+                    let bg_color = NSColor::colorWithRed_green_blue_alpha(23.0/ 255.0, 23.0/ 255.0, 23.0/ 255.0, 1.0);
                     let ns_window_ref = &*(ns_window as *const NSWindow);
                     ns_window_ref.setBackgroundColor(Some(&bg_color));
                 }

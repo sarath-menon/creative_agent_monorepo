@@ -8,7 +8,7 @@ ehthumbs.db
 Thumbs.db
 
 # Go backend
-go_backend/go_general_agent
+go_backend/mix
 go_backend/main
 go_backend/*.log
 go_backend/tmp/

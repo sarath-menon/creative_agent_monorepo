@@ -3,11 +3,11 @@ package agent
 import (
 	"context"
 
-	"go_general_agent/internal/history"
-	"go_general_agent/internal/llm/tools"
-	"go_general_agent/internal/message"
-	"go_general_agent/internal/permission"
-	"go_general_agent/internal/session"
+	"mix/internal/history"
+	"mix/internal/llm/tools"
+	"mix/internal/message"
+	"mix/internal/permission"
+	"mix/internal/session"
 )
 
 func CoderAgentTools(

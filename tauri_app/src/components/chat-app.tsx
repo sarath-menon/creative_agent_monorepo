@@ -32,19 +32,18 @@ import { useSession, useCreateSession } from '@/hooks/useSession';
 import { useSendMessage } from '@/hooks/useMessages';
 import { usePersistentSSE } from '@/hooks/usePersistentSSE';
 import { type FileEntry } from '@/hooks/useFileSystem';
+import { useOpenApps } from '@/hooks/useOpenApps';
 import { useFileReference } from '@/hooks/useFileReference';
 import { CommandFileReference } from './command-file-reference';
-import { useMediaStore, type MediaItem, expandFileReferences, removeFileReferences } from '@/stores/mediaStore';
+import { useAttachmentStore, type Attachment, expandFileReferences, removeFileReferences, createFileAttachment, createFolderAttachment } from '@/stores/attachmentStore';
 import { useFolderSelection } from '@/hooks/useFolderSelection';
 import { useMessageHistoryNavigation } from '@/hooks/useMessageHistoryNavigation';
 import { useMessageScrolling } from '@/hooks/useMessageScrolling';
 import { LoadingDots } from './loading-dots';
-import { MediaPreview } from './media-preview';
-import { AppDisplayPopover } from './app-display-popover';
-import { SlashCommandDropdown, shouldShowSlashCommands, handleSlashCommandNavigation, slashCommands } from './slash-command-dropdown';
+import { AttachmentPreview } from './attachment-preview';
+import { CommandSlash, shouldShowSlashCommands, handleSlashCommandNavigation, slashCommands } from './command-slash';
 import { ResponseRenderer } from './response-renderer';
-import { MessageMediaDisplay } from './message-media-display';
-import { SessionHeader } from './session-header';
+import { MessageAttachmentDisplay } from './message-attachment-display';
 
 
 type ToolCall = {
@@ -60,7 +59,7 @@ type Message = {
   content: string;
   from: 'user' | 'assistant';
   toolCalls?: ToolCall[];
-  media?: MediaItem[];
+  attachments?: Attachment[];
 };
 
 export function ChatApp() {
@@ -69,23 +68,36 @@ export function ChatApp() {
   const [showSlashCommands, setShowSlashCommands] = useState(false);
   const [selectedCommandIndex, setSelectedCommandIndex] = useState(0);
   const [inputElement, setInputElement] = useState<HTMLTextAreaElement | null>(null);
-  const [showAppsPopover, setShowAppsPopover] = useState(false);
+  const [showCommands, setShowCommands] = useState(false);
   const interruptedMessageAddedRef = useRef(false);
 
 
 
   const { data: session, isLoading: sessionLoading, error: sessionError } = useSession();
-  const createSession = useCreateSession();
-  const sendMessage = useSendMessage();
   const sseStream = usePersistentSSE(session?.id || '');
-  const files = useMediaStore(state => state.files);
-  const referenceMap = useMediaStore(state => state.referenceMap);
-  const addFile = useMediaStore(state => state.addFile);
-  const addFolder = useMediaStore(state => state.addFolder);
-  const removeFile = useMediaStore(state => state.removeFile);
-  const clearFiles = useMediaStore(state => state.clearFiles);
-  const syncWithText = useMediaStore(state => state.syncWithText);
-  const removeReference = useMediaStore(state => state.removeReference);
+  const attachments = useAttachmentStore(state => state.attachments);
+  const referenceMap = useAttachmentStore(state => state.referenceMap);
+  const { apps: openApps } = useOpenApps();
+  
+  // Transform open apps to Attachment format and filter allowed apps
+  const allowedApps = ['Notes', 'Obsidian', 'Blender', 'Pixelmator Pro', 'Final Cut Pro'];
+  const availableApps = useMemo(() => {
+    return openApps
+      .filter(app => allowedApps.some(allowed => app.name.toLowerCase().includes(allowed.toLowerCase())))
+      .map(app => ({
+        id: `app:${app.name}`,
+        name: app.name,
+        type: 'app' as const,
+        icon: app.icon_png_base64,
+        isOpen: true
+      }));
+  }, [openApps]);
+  const addAttachment = useAttachmentStore(state => state.addAttachment);
+  const removeAttachment = useAttachmentStore(state => state.removeAttachment);
+  const clearAttachments = useAttachmentStore(state => state.clearAttachments);
+  const addReference = useAttachmentStore(state => state.addReference);
+  const removeReference = useAttachmentStore(state => state.removeReference);
+  const syncWithText = useAttachmentStore(state => state.syncWithText);
   const { selectedFolder, selectFolder } = useFolderSelection();
 
   const handleFolderSelect = async () => {
@@ -102,11 +114,23 @@ export function ChatApp() {
   // Memoize the folder path to prevent unnecessary re-renders
   const memoizedFolderPath = useMemo(() => selectedFolder || undefined, [selectedFolder]);
   
-  const fileRef = useFileReference(text, setText, memoizedFolderPath, inputElement);
+  const fileRef = useFileReference(text, setText, memoizedFolderPath);
   
-  const handleFileSelect = (file: FileEntry) => {
-    fileRef.selectFile(file);
+
+  const handleAppSelect = (app: Attachment) => {
+    // Update text with app reference (similar to file selection)
+    const words = text.split(' ');
+    const displayReference = `@${app.name}`;
+    words[words.length - 1] = `${displayReference} `;
+    const newText = words.join(' ');
+    
+    // Add app to attachment store and create reference mapping
+    addAttachment(app);
+    addReference(displayReference, `app:${app.name}`);
+    setText(newText);
   };
+
+
   
   // Initialize new hooks
   const historyNavigation = useMessageHistoryNavigation({
@@ -124,26 +148,44 @@ export function ChatApp() {
     // Sync media store with text changes (bidirectional sync)
     syncWithText(value);
     
-    // Handle slash commands using utility function
+    // Check if user just typed a slash to open Command-K menu
+    if (value.endsWith('/') && value.length > 0 && value[value.length - 1] === '/') {
+      // Remove the slash and open Command-K menu
+      setText(value.slice(0, -1));
+      setShowCommands(true);
+      setShowSlashCommands(false);
+      return;
+    }
+    
+    // Handle slash commands using utility function (for other cases)
     const shouldShow = shouldShowSlashCommands(value);
     setShowSlashCommands(shouldShow);
-    if (shouldShow) {
-      setSelectedCommandIndex(0);
+    if (!shouldShow) {
+      setShowCommands(false);
     }
   };
 
   const handleSlashCommandSelect = async (command: typeof slashCommands[0]) => {
-    const commandText = `/${command.name}`;
     setShowSlashCommands(false);
+    // Remove the slash from the text and open Command-K menu
+    setText(text.slice(0, -1)); // Remove the trailing slash
+    setShowCommands(true);
+  };
+
+  const handleCommandExecute = (command: string) => {
+    setShowCommands(false);
     
-    // Track slash command usage with full command text
-    safeTrackEvent('slash_command_used', {
-      command_name: command.name,
-      command_text: commandText,
-      session_id: session?.id
-    });
+    // Handle special commands directly
+    if (command === 'clear') {
+      handleNewSession();
+      return;
+    }
     
-    await submitMessage(commandText);
+    submitMessage(`/${command}`);
+  };
+
+  const handleCommandClose = () => {
+    setShowCommands(false);
   };
 
 
@@ -256,6 +298,13 @@ export function ChatApp() {
     }
   }, [sseStream.error, session?.id]);
 
+  // Declarative focus management - refocus chat input when all popups are closed
+  useEffect(() => {
+    if (!showCommands && !fileRef.show && !showSlashCommands && inputElement) {
+      inputElement.focus();
+    }
+  }, [showCommands, fileRef.show, showSlashCommands, inputElement]);
+
   // Handle pause state changes - simplified since pausing is not implemented
   // (Keeping this for compatibility but it won't trigger since isPaused will always be false)
 
@@ -271,10 +320,10 @@ export function ChatApp() {
     setMessages(prev => [...prev, { 
       content: messageText, 
       from: 'user',
-      media: files.length > 0 ? files : undefined
+      attachments: attachments.length > 0 ? attachments : undefined
     }]);
     setText('');
-    clearFiles();
+    clearAttachments();
     
     // Reset interrupted message guard for new message
     interruptedMessageAddedRef.current = false;
@@ -297,7 +346,8 @@ export function ChatApp() {
       
       const messageData = {
         text: expandedText,
-        media: files.length > 0 ? files.map(f => f.path) : undefined
+        media: attachments.filter(a => a.path).map(a => a.path),
+        apps: attachments.filter(a => a.type === 'app').map(app => app.name)
       };
       await sseStream.sendMessage(JSON.stringify(messageData));
     } catch (error) {
@@ -320,7 +370,7 @@ export function ChatApp() {
   const handleNewSession = () => {
     setMessages([]);
     setText('');
-    clearFiles();
+    clearAttachments();
     interruptedMessageAddedRef.current = false;
     
     // Track new session creation with more details
@@ -336,16 +386,24 @@ export function ChatApp() {
   const buttonStatus = sseStream.processing ? 'streaming' : 
                       sseStream.error ? 'error' : 'ready';
   
-  // Ready state: need text/media and connection. Other states: only need connection for pause/resume
+  // Ready state: need text/attachments and connection. Other states: only need connection for pause/resume
   const isSubmitDisabled = buttonStatus === 'ready' 
-    ? ((!text && files.length === 0) || !session?.id || sessionLoading || !sseStream.connected)
+    ? ((!text && attachments.length === 0) || !session?.id || sessionLoading || !sseStream.connected)
     : (!session?.id || sessionLoading || !sseStream.connected);
 
   return (
     <TooltipProvider>
       <div className="flex flex-col h-screen px-4 pb-4">
-      {/* Header with New Session Button */}
-      <SessionHeader onNewSession={handleNewSession} />
+      {/* Header with Folder Select Button */}
+      <div className="flex justify-end mb-2">
+        <button
+          onClick={handleFolderSelect}
+          className="flex items-center gap-2 text-sm font-medium text-stone-500 hover:text-stone-100 hover:bg-stone-700/50 rounded-lg p-2 transition-colors"
+          title={selectedFolder ? `Current folder: ${selectedFolder}` : 'Select parent folder'}
+        >
+          <FolderIcon className={`size-5 ${selectedFolder ? 'text-blue-400' : ''}`} />
+        </button>
+      </div>
       
       {/* Conversation Display */}
       <div ref={conversationRef} className="relative h-full flex-1 overflow-y-auto">
@@ -361,7 +419,7 @@ export function ChatApp() {
                   <ResponseRenderer content={message.content} />
                 ) : (
                   <div>
-                    <MessageMediaDisplay media={message.media || []} />
+                    <MessageAttachmentDisplay attachments={message.attachments || []} />
                     {message.content}
                   </div>
                 )}
@@ -437,30 +495,36 @@ export function ChatApp() {
       </div>
 
 
-      {/* Media Preview Section */}
+      {/* Attachment Preview Section */}
       <div className="max-w-4xl mx-auto w-full mb-0">
-        <MediaPreview attachedMedia={files} onRemoveItem={(index) => {
-          const fileToRemove = files[index];
-          if (fileToRemove) {
-            const updatedText = removeFileReferences(text, referenceMap, fileToRemove.path);
-            setText(updatedText);
-            
-            // Remove the reference from the map
-            for (const [displayName, fullPath] of referenceMap) {
-              if (fullPath === fileToRemove.path) {
-                removeReference(displayName);
-                break;
+        <AttachmentPreview 
+          attachments={attachments} 
+          onRemoveItem={(index) => {
+            const attachmentToRemove = attachments[index];
+            if (attachmentToRemove) {
+              const fullPath = attachmentToRemove.type === 'app' 
+                ? `app:${attachmentToRemove.name}` 
+                : attachmentToRemove.path!;
+              const updatedText = removeFileReferences(text, referenceMap, fullPath);
+              setText(updatedText);
+              
+              // Remove the reference from the map
+              for (const [displayName, mappedPath] of referenceMap) {
+                if (mappedPath === fullPath) {
+                  removeReference(displayName);
+                  break;
+                }
               }
             }
-          }
-          removeFile(index);
-        }} />
+            removeAttachment(index);
+          }} 
+        />
       </div>
 
       {/* AI Input Section */}
       <div className="max-w-4xl mx-auto w-full relative">
         <div className="relative">
-          <AIInput onSubmit={handleSubmit} className='bg-stone-600/20 border-neutral-600 border-[0.5px]'>
+          <AIInput onSubmit={handleSubmit} className='border-neutral-600 border-[0.5px]'>
             <AIInputTextarea
             onChange={(e) => {
               handleTextChange(e.target.value);
@@ -471,17 +535,11 @@ export function ChatApp() {
             onKeyDown={handleKeyDown}
             value={text}
             availableFiles={fileRef.files.map(file => file.name)}
+            availableApps={attachments.filter(a => a.type === 'app').map(app => app.name)}
             availableCommands={slashCommands.map(cmd => cmd.name)}
             autoFocus/>
           <AIInputToolbar>
             <AIInputTools>
-              <AIInputButton onClick={handleFolderSelect} title={selectedFolder ? `Current folder: ${selectedFolder}` : 'Select parent folder'}>
-                <FolderIcon className={`size-6 ${selectedFolder ? 'text-blue-400' : ''}`} />
-              </AIInputButton>
-              <AppDisplayPopover 
-                isOpen={showAppsPopover}
-                onOpenChange={setShowAppsPopover}
-              />
             </AIInputTools>
             <AIInputSubmit 
               disabled={isSubmitDisabled}
@@ -492,18 +550,21 @@ export function ChatApp() {
         </AIInput>
         </div>
         
-        {/* Slash Command Dropdown */}
-        <SlashCommandDropdown 
-          isVisible={showSlashCommands}
-          selectedIndex={selectedCommandIndex}
-          onCommandSelect={handleSlashCommandSelect}
-        />
+        {/* Unified Command System */}
+        {showCommands && (
+          <CommandSlash
+            onExecuteCommand={handleCommandExecute}
+            onClose={handleCommandClose}
+          />
+        )}
 
         {/* File Reference Dropdown with Command Component */}
         {fileRef.show && (
           <CommandFileReference
             files={fileRef.files}
-            onSelect={handleFileSelect}
+            apps={availableApps}
+            onSelect={fileRef.selectFile}
+            onSelectApp={handleAppSelect}
             currentFolder={fileRef.currentFolder}
             isLoadingFolder={fileRef.isLoadingFolder}
             onGoBack={fileRef.goBack}

@@ -1,4 +1,4 @@
-module go_general_agent
+module mix
 
 go 1.24.0
 

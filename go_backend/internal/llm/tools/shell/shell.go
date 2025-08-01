@@ -12,7 +12,8 @@ import (
 	"syscall"
 	"time"
 
-	"go_general_agent/internal/config"
+	"mix/internal/config"
+
 	"mvdan.cc/sh/v3/syntax"
 )
 
@@ -303,7 +304,8 @@ func (s *PersistentShell) Close() {
 }
 
 func shellQuote(s string) string {
-	return syntax.Quote(s, syntax.LangBash)
+	quoted, _ := syntax.Quote(s, syntax.LangBash)
+	return quoted
 }
 
 func readFileOrEmpty(path string) string {

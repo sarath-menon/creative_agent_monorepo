@@ -7,10 +7,11 @@ import (
 	"fmt"
 	"time"
 
+	"mix/internal/db"
+	"mix/internal/llm/models"
+	"mix/internal/pubsub"
+
 	"github.com/google/uuid"
-	"go_general_agent/internal/db"
-	"go_general_agent/internal/llm/models"
-	"go_general_agent/internal/pubsub"
 )
 
 type CreateMessageParams struct {

@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"go_general_agent/internal/config"
-	"go_general_agent/internal/llm/tools/shell"
-	"go_general_agent/internal/permission"
+	"mix/internal/config"
+	"mix/internal/llm/tools/shell"
+	"mix/internal/permission"
 )
 
 type BashParams struct {

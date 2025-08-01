@@ -14,8 +14,8 @@ import (
 	"strings"
 	"time"
 
-	"go_general_agent/internal/config"
-	"go_general_agent/internal/fileutil"
+	"mix/internal/config"
+	"mix/internal/fileutil"
 )
 
 type GrepParams struct {

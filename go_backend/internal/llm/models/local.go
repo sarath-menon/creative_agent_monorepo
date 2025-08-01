@@ -10,8 +10,9 @@ import (
 	"strings"
 	"unicode"
 
+	"mix/internal/logging"
+
 	"github.com/spf13/viper"
-	"go_general_agent/internal/logging"
 )
 
 const (

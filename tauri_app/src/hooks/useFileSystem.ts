@@ -2,12 +2,12 @@ import { useQuery } from '@tanstack/react-query';
 import { useCallback } from 'react';
 import { readDir, BaseDirectory } from '@tauri-apps/plugin-fs';
 import * as path from '@tauri-apps/api/path';
-import { filterAndSortEntries, type MediaItem } from '@/stores/mediaStore';
+import { filterAndSortEntries, type Attachment } from '@/stores/attachmentStore';
 
-export type { MediaItem };
+export type MediaItem = Attachment;
 
 interface FileSystemData {
-  files: MediaItem[];
+  files: Attachment[];
   currentDirectory: string;
 }
 
@@ -42,7 +42,7 @@ const fetchFileSystemData = async (customBasePath?: string): Promise<FileSystemD
   }
 };
 
-const fetchDirectoryContents = async (dirPath: string, customBasePath?: string): Promise<MediaItem[]> => {
+const fetchDirectoryContents = async (dirPath: string, customBasePath?: string): Promise<Attachment[]> => {
   try {
     if (customBasePath) {
       // Use absolute path when we have a custom base

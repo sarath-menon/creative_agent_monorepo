@@ -11,10 +11,10 @@ import (
 	"sync"
 	"time"
 
-	"go_general_agent/internal/api"
-	"go_general_agent/internal/commands"
-	"go_general_agent/internal/fileutil"
-	"go_general_agent/internal/llm/agent"
+	"mix/internal/api"
+	"mix/internal/commands"
+	"mix/internal/fileutil"
+	"mix/internal/llm/agent"
 )
 
 // Connection represents a single SSE connection
@@ -46,7 +46,7 @@ func (r *ConnectionRegistry) Register(sessionID string, conn *Connection) {
 func (r *ConnectionRegistry) Unregister(sessionID string, conn *Connection) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	
+
 	connections := r.connections[sessionID]
 	for i, c := range connections {
 		if c == conn {
@@ -55,7 +55,7 @@ func (r *ConnectionRegistry) Unregister(sessionID string, conn *Connection) {
 			break
 		}
 	}
-	
+
 	// Clean up empty session entries
 	if len(r.connections[sessionID]) == 0 {
 		delete(r.connections, sessionID)
@@ -66,7 +66,7 @@ func (r *ConnectionRegistry) Unregister(sessionID string, conn *Connection) {
 func (r *ConnectionRegistry) Broadcast(sessionID, message string) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	
+
 	connections := r.connections[sessionID]
 	for _, conn := range connections {
 		select {
@@ -184,14 +184,14 @@ func parseMessageContent(content string) (MessageContent, error) {
 // quotePaths ensures all file paths in the content are properly quoted for shell operations
 func quotePaths(text string, mediaPaths []string) string {
 	result := text
-	
+
 	// Quote media paths that might be referenced in the text
 	for _, path := range mediaPaths {
 		quotedPath := fileutil.QuotePath(path)
 		// Replace unquoted paths with quoted versions
 		result = strings.ReplaceAll(result, path, quotedPath)
 	}
-	
+
 	return result
 }
 
@@ -229,7 +229,7 @@ func handleRegularMessage(ctx context.Context, handler *api.QueryHandler, w http
 		case <-ctx.Done():
 			handler.GetApp().CoderAgent.Cancel(sessionID)
 			return ctx.Err()
-			
+
 		case event, ok := <-events:
 			if !ok {
 				var content, messageID string
@@ -263,7 +263,7 @@ func processMessage(ctx context.Context, handler *api.QueryHandler, w http.Respo
 	if err != nil {
 		return err
 	}
-	
+
 	text := msgContent.Text
 
 	switch {
@@ -272,7 +272,7 @@ func processMessage(ctx context.Context, handler *api.QueryHandler, w http.Respo
 		quotedText := quotePaths(text, msgContent.Media)
 		return handleSlashCommandStreaming(ctx, handler, w, flusher, sessionID, quotedText)
 	case strings.HasPrefix(text, "!"):
-		// Quote paths in shell commands 
+		// Quote paths in shell commands
 		quotedText := quotePaths(text, msgContent.Media)
 		return handleShellCommand(ctx, w, flusher, quotedText)
 	default:

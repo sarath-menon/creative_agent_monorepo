@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowUpIcon, ArrowUp, Loader2Icon, SendIcon, SquareIcon, XIcon, PlayIcon } from 'lucide-react';
+import { ArrowUpIcon, Loader2Icon, SquareIcon, XIcon, PlayIcon } from 'lucide-react';
 import type {
   ComponentProps,
   HTMLAttributes,
@@ -79,7 +79,7 @@ export type AIInputProps = HTMLAttributes<HTMLFormElement>;
 export const AIInput = ({ className, ...props }: AIInputProps) => (
   <form
     className={cn(
-      'w-full overflow-hidden rounded-xl border bg-background shadow-sm',
+      'w-full overflow-hidden rounded-3xl border bg-stone-100 dark:bg-stone-800 shadow-sm',
       className
     )}
     {...props}
@@ -90,6 +90,7 @@ export type AIInputTextareaProps = ComponentProps<typeof Textarea> & {
   minHeight?: number;
   maxHeight?: number;
   availableFiles?: string[];
+  availableApps?: string[];
   availableCommands?: string[];
 };
 
@@ -102,6 +103,7 @@ export const AIInputTextarea = ({
   maxHeight = 164,
   value = '',
   availableFiles = [],
+  availableApps = [],
   availableCommands = [],
   ...props
 }: AIInputTextareaProps) => {
@@ -113,7 +115,7 @@ export const AIInputTextarea = ({
   const overlayRef = useRef<HTMLDivElement>(null);
   const previousValueRef = useRef<string>(value || '');
   
-  const parser = useMemo(() => new TextParser(availableFiles, availableCommands), [availableFiles, availableCommands]);
+  const parser = useMemo(() => new TextParser(availableFiles, availableCommands, availableApps), [availableFiles, availableCommands, availableApps]);
   const tokens = useMemo(() => parser.parse(value || ''), [parser, value]);
   
   // Update ref when value changes from outside

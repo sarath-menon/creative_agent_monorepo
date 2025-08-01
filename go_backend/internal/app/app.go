@@ -6,15 +6,15 @@ import (
 	"errors"
 	"fmt"
 
-	"go_general_agent/internal/config"
-	"go_general_agent/internal/db"
-	"go_general_agent/internal/format"
-	"go_general_agent/internal/history"
-	"go_general_agent/internal/llm/agent"
-	"go_general_agent/internal/logging"
-	"go_general_agent/internal/message"
-	"go_general_agent/internal/permission"
-	"go_general_agent/internal/session"
+	"mix/internal/config"
+	"mix/internal/db"
+	"mix/internal/format"
+	"mix/internal/history"
+	"mix/internal/llm/agent"
+	"mix/internal/logging"
+	"mix/internal/message"
+	"mix/internal/permission"
+	"mix/internal/session"
 )
 
 type App struct {
@@ -24,7 +24,7 @@ type App struct {
 	Permissions permission.Service
 
 	CoderAgent agent.Service
-	
+
 	// Current session tracking for API session selection
 	currentSessionID string
 }
@@ -44,7 +44,7 @@ func New(ctx context.Context, conn *sql.DB) (*App, error) {
 
 	// Create MCP manager for this agent
 	mcpManager := agent.NewMCPClientManager()
-	
+
 	var err error
 	app.CoderAgent, err = agent.NewAgent(
 		config.AgentMain,
@@ -94,7 +94,6 @@ func (a *App) RunNonInteractive(ctx context.Context, prompt string, outputFormat
 	}
 	logging.Info("Created session for non-interactive run", "session_id", sess.ID)
 
-
 	done, err := a.CoderAgent.Run(ctx, sess.ID, prompt)
 	if err != nil {
 		return fmt.Errorf("failed to start agent processing stream: %w", err)
@@ -128,13 +127,13 @@ func (a *App) SetCurrentSession(sessionID string) error {
 		a.currentSessionID = ""
 		return nil
 	}
-	
+
 	// Verify session exists
 	_, err := a.Sessions.Get(context.Background(), sessionID)
 	if err != nil {
 		return fmt.Errorf("session not found: %w", err)
 	}
-	
+
 	a.currentSessionID = sessionID
 	return nil
 }
@@ -144,14 +143,14 @@ func (a *App) GetCurrentSession(ctx context.Context) (*session.Session, error) {
 	if a.currentSessionID == "" {
 		return nil, nil
 	}
-	
+
 	sess, err := a.Sessions.Get(ctx, a.currentSessionID)
 	if err != nil {
 		// Reset current session if it no longer exists
 		a.currentSessionID = ""
 		return nil, fmt.Errorf("current session no longer exists: %w", err)
 	}
-	
+
 	return &sess, nil
 }
 

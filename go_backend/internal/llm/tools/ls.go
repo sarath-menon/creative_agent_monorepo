@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"go_general_agent/internal/config"
+	"mix/internal/config"
 )
 
 type LSParams struct {

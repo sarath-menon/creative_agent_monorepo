@@ -1,7 +1,7 @@
-.PHONY: build dev clean install-air help
+.PHONY: build dev clean install-air help update-blender-init
 
 # Variables
-BINARY_NAME=go_general_agent
+BINARY_NAME=mix
 BUILD_DIR=go_backend/build
 MAIN_PATH=./go_backend/main.go
 

@@ -1,4 +1,4 @@
-export type TokenType = 'text' | 'file-ref' | 'slash-command';
+export type TokenType = 'text' | 'file-ref' | 'app-ref' | 'slash-command';
 
 export interface Token {
   type: TokenType;
@@ -8,7 +8,7 @@ export interface Token {
 }
 
 export class TextParser {
-  constructor(private availableFiles: string[], private availableCommands: string[]) {}
+  constructor(private availableFiles: string[], private availableCommands: string[], private availableApps: string[] = []) {}
 
   parse(text: string): Token[] {
     if (!text) return [{ type: 'text', content: '', start: 0, end: 0 }];
@@ -25,6 +25,16 @@ export class TextParser {
           matches.push({ type: 'file-ref', start: match.index, end: match.index + match[0].length, content: match[0] });
         }
       });
+    });
+    
+    // Match app references
+    this.availableApps.forEach(appName => {
+      const pattern = `@${appName}`;
+      const regex = new RegExp(this.escapeRegex(pattern), 'g');
+      let match;
+      while ((match = regex.exec(text)) !== null) {
+        matches.push({ type: 'app-ref', start: match.index, end: match.index + match[0].length, content: match[0] });
+      }
     });
     
     this.availableCommands.forEach(command => {
@@ -94,13 +104,14 @@ export class TextParser {
   getTokenStyle(type: TokenType): string {
     switch (type) {
       case 'file-ref': return 'bg-green-400/20 rounded';
+      case 'app-ref': return 'bg-purple-400/20 text-purple-300 rounded';
       case 'slash-command': return 'bg-blue-400/20 text-blue-300 rounded';
       default: return '';
     }
   }
   
   private isSpecialToken(type: TokenType): boolean {
-    return type === 'file-ref' || type === 'slash-command';
+    return type === 'file-ref' || type === 'app-ref' || type === 'slash-command';
   }
   
   private escapeRegex(string: string): string {
@@ -124,5 +135,5 @@ export function getTokenStyle(type: TokenType): string {
 }
 
 export function isWholeTokenDeletion(type: TokenType): boolean {
-  return type === 'file-ref' || type === 'slash-command';
+  return type === 'file-ref' || type === 'app-ref' || type === 'slash-command';
 }

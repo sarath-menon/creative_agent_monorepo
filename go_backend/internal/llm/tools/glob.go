@@ -10,9 +10,9 @@ import (
 	"sort"
 	"strings"
 
-	"go_general_agent/internal/config"
-	"go_general_agent/internal/fileutil"
-	"go_general_agent/internal/logging"
+	"mix/internal/config"
+	"mix/internal/fileutil"
+	"mix/internal/logging"
 )
 
 const (

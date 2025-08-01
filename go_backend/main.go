@@ -1,8 +1,8 @@
 package main
 
 import (
-	"go_general_agent/cmd"
-	"go_general_agent/internal/logging"
+	"mix/cmd"
+	"mix/internal/logging"
 )
 
 func main() {

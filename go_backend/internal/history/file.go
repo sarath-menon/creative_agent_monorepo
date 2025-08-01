@@ -8,9 +8,10 @@ import (
 	"strings"
 	"time"
 
+	"mix/internal/db"
+	"mix/internal/pubsub"
+
 	"github.com/google/uuid"
-	"go_general_agent/internal/db"
-	"go_general_agent/internal/pubsub"
 )
 
 const (

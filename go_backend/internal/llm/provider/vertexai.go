@@ -4,7 +4,8 @@ import (
 	"context"
 	"os"
 
-	"go_general_agent/internal/logging"
+	"mix/internal/logging"
+
 	"google.golang.org/genai"
 )
 

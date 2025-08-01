@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"go_general_agent/internal/config"
-	"go_general_agent/internal/permission"
-	"go_general_agent/internal/utils"
+	"mix/internal/config"
+	"mix/internal/permission"
+	"mix/internal/utils"
 )
 
 type NotesParams struct {
@@ -19,15 +19,15 @@ type NotesParams struct {
 }
 
 type NoteInfo struct {
-	ID               string    `json:"id"`
-	Name             string    `json:"name"`
-	Body             string    `json:"body"`
-	Plaintext        string    `json:"plaintext"`
-	CreationDate     time.Time `json:"creation_date"`
-	ModificationDate time.Time `json:"modification_date"`
-	PasswordProtected bool     `json:"password_protected"`
-	Shared           bool      `json:"shared"`
-	Container        string    `json:"container"`
+	ID                string    `json:"id"`
+	Name              string    `json:"name"`
+	Body              string    `json:"body"`
+	Plaintext         string    `json:"plaintext"`
+	CreationDate      time.Time `json:"creation_date"`
+	ModificationDate  time.Time `json:"modification_date"`
+	PasswordProtected bool      `json:"password_protected"`
+	Shared            bool      `json:"shared"`
+	Container         string    `json:"container"`
 }
 
 type notesTool struct {
@@ -136,7 +136,7 @@ func (n *notesTool) getCurrentNote(ctx context.Context) (*NoteInfo, error) {
 	if err != nil {
 		// Log the actual AppleScript error for debugging
 		log.Printf("[Notes Tool] AppleScript error in getCurrentNote: %v", err)
-		
+
 		if strings.Contains(err.Error(), "No note selected") {
 			return nil, fmt.Errorf("no note is currently selected in Notes app")
 		}
@@ -188,7 +188,7 @@ func (n *notesTool) getCurrentNoteHTML(ctx context.Context) (string, error) {
 	if err != nil {
 		// Log the actual AppleScript error for debugging
 		log.Printf("[Notes Tool] AppleScript error in getCurrentNoteHTML: %v", err)
-		
+
 		if strings.Contains(err.Error(), "No note selected") {
 			return "", fmt.Errorf("no note is currently selected in Notes app")
 		}
