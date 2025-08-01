@@ -67,29 +67,18 @@ def get_document_info() -> Dict[str, Any]:
         RuntimeError: If no document is open
     """
     try:
-        # Get basic document properties
-        width_script = 'tell application "Pixelmator Pro" to get width of front document'
-        height_script = 'tell application "Pixelmator Pro" to get height of front document'
-        name_script = 'tell application "Pixelmator Pro" to get name of front document'
-        id_script = 'tell application "Pixelmator Pro" to get id of front document'
-
-        width = float(_run_applescript(width_script))
-        height = float(_run_applescript(height_script))
-        name = _run_applescript(name_script)
-        doc_id = _run_applescript(id_script)
-
-        # Try to get resolution and color profile (these might not always be available)
-        try:
-            resolution_script = 'tell application "Pixelmator Pro" to get resolution of front document'
-            resolution = float(_run_applescript(resolution_script))
-        except RuntimeError:
-            resolution = 72.0  # Default DPI
-
-        try:
-            profile_script = 'tell application "Pixelmator Pro" to get color profile of front document'
-            color_profile = _run_applescript(profile_script)
-        except RuntimeError:
-            color_profile = "sRGB"  # Default profile
+        script = 'tell application "Pixelmator Pro" to tell front document to get {width, height, name, id, resolution, color profile}'
+        result = _run_applescript(script)
+        
+        # Parse comma-separated list: "1536.0, 1024.0, Name, ID, 72.0, None"
+        parts = [part.strip() for part in result.split(',')]
+        
+        width = float(parts[0])
+        height = float(parts[1])
+        name = parts[2]
+        doc_id = parts[3]
+        resolution = float(parts[4]) if parts[4] != "None" else 72.0
+        color_profile = parts[5] if parts[5] != "None" else "sRGB"
 
         return {
             "id": doc_id,
@@ -117,41 +106,52 @@ def get_layers() -> List[Dict[str, Any]]:
         RuntimeError: If no document is open
     """
     try:
-        # Get layer names
-        names_script = 'tell application "Pixelmator Pro" to get name of every layer of front document'
-        names_result = _run_applescript(names_script)
+        script = '''
+        tell application "Pixelmator Pro"
+            tell front document
+                set layerData to {}
+                repeat with i from 1 to count of layers
+                    set currentLayer to layer i
+                    try
+                        set layerInfo to (name of currentLayer) & "|" & (visible of currentLayer) & "|" & (opacity of currentLayer) & "|" & (class of currentLayer) & "|" & (blend mode of currentLayer)
+                    on error
+                        try
+                            set layerInfo to (name of currentLayer) & "|" & (visible of currentLayer) & "|" & (opacity of currentLayer) & "|" & (class of currentLayer) & "|normal"
+                        on error
+                            set layerInfo to (name of currentLayer) & "|true|100|unknown|normal"
+                        end try
+                    end try
+                    set end of layerData to layerInfo
+                end repeat
+                set AppleScript's text item delimiters to "\\n"
+                set layerDataString to layerData as string
+                set AppleScript's text item delimiters to ""
+                return layerDataString
+            end tell
+        end tell
+        '''
         
-        if names_result == "":
+        result = _run_applescript(script)
+        
+        if not result or result.strip() == "":
             return []
 
-        # Parse layer names (they come as comma-separated string)
-        layer_names = [name.strip() for name in names_result.split(',')]
-
         layers = []
-        for name in layer_names:
-            try:
-                # Get layer properties
-                visible_script = f'tell application "Pixelmator Pro" to get visible of layer "{name}" of front document'
-                opacity_script = f'tell application "Pixelmator Pro" to get opacity of layer "{name}" of front document'
+        # AppleScript returns each layer info on a separate line
+        for layer_info in result.strip().split('\n'):
+            if not layer_info.strip():
+                continue
                 
-                visible = _run_applescript(visible_script).lower() == 'true'
-                opacity = float(_run_applescript(opacity_script))
-
-                # Try to get blend mode and type (these might not always be available)
-                try:
-                    blend_script = f'tell application "Pixelmator Pro" to get blend mode of layer "{name}" of front document'
-                    blend_mode = _run_applescript(blend_script)
-                except RuntimeError:
-                    blend_mode = "normal"
-
-                # Determine layer type based on class
-                try:
-                    type_script = f'tell application "Pixelmator Pro" to get class of layer "{name}" of front document'
-                    layer_class = _run_applescript(type_script)
-                    layer_type = _parse_layer_type(layer_class)
-                except RuntimeError:
-                    layer_type = "unknown"
-
+            parts = layer_info.split('|')
+            if len(parts) >= 5:
+                name = parts[0]
+                visible = parts[1].lower() == 'true'
+                opacity = float(parts[2])
+                layer_class = parts[3]
+                blend_mode = parts[4]
+                
+                layer_type = _parse_layer_type(layer_class)
+                
                 layers.append({
                     "name": name,
                     "type": layer_type,
@@ -159,10 +159,6 @@ def get_layers() -> List[Dict[str, Any]]:
                     "opacity": opacity,
                     "blend_mode": blend_mode
                 })
-
-            except RuntimeError:
-                # If we can't get properties for a layer, skip it
-                continue
 
         return layers
 
@@ -331,10 +327,17 @@ def close_document(save: bool = False) -> bool:
     """
     try:
         if save:
-            script = 'tell application "Pixelmator Pro" to save front document'
-            _run_applescript(script)
-
-        script = 'tell application "Pixelmator Pro" to close front document'
+            script = '''
+            tell application "Pixelmator Pro"
+                tell front document
+                    save
+                    close
+                end tell
+            end tell
+            '''
+        else:
+            script = 'tell application "Pixelmator Pro" to close front document'
+        
         _run_applescript(script)
         return True
 
@@ -400,35 +403,65 @@ def duplicate_layer(layer_name: str) -> Dict[str, Any]:
         layer_name: Name of the layer to duplicate
 
     Returns:
-        Dict[str, Any]: New layer info dictionary
+        Dict[str, Any]: New layer info dictionary with 'index' field for unique identification
 
     Raises:
         ValueError: If layer doesn't exist
         RuntimeError: If duplication fails
     """
-    # Verify layer exists
-    layers = get_layers()
-    if not any(layer['name'] == layer_name for layer in layers):
-        raise ValueError(f"Layer '{layer_name}' not found")
+    # Verify layer exists and duplicate in single operation
+    script = f'''
+    tell application "Pixelmator Pro"
+        tell front document
+            if not (exists layer "{layer_name}") then
+                error "Layer not found"
+            end if
+            set layerCountBefore to count of layers
+            duplicate layer "{layer_name}"
+            set layerCountAfter to count of layers
+            if layerCountAfter <= layerCountBefore then
+                error "Duplication failed"
+            end if
+            -- The duplicated layer is typically inserted at the top (index 1)
+            set duplicatedLayer to layer 1
+            try
+                return (name of duplicatedLayer) & "|" & (visible of duplicatedLayer) & "|" & (opacity of duplicatedLayer) & "|" & (class of duplicatedLayer) & "|" & (blend mode of duplicatedLayer) & "|1"
+            on error
+                return (name of duplicatedLayer) & "|true|100|unknown|normal|1"
+            end try
+        end tell
+    end tell
+    '''
+    
+    try:
+        result = _run_applescript(script)
+        parts = result.split('|')
+        
+        if len(parts) >= 6:
+            return {
+                "name": parts[0],
+                "type": _parse_layer_type(parts[3]),
+                "visible": parts[1].lower() == 'true',
+                "opacity": float(parts[2]),
+                "blend_mode": parts[4],
+                "index": int(parts[5])
+            }
+        else:
+            raise RuntimeError(f"Failed to get duplicated layer info: {result}")
+            
+    except RuntimeError as e:
+        if "Layer not found" in str(e):
+            raise ValueError(f"Layer '{layer_name}' not found") from e
+        raise RuntimeError(f"Failed to duplicate layer: {layer_name}") from e
 
-    script = f'tell application "Pixelmator Pro" to duplicate layer "{layer_name}" of front document'
-    _run_applescript(script)
 
-    # Find the duplicated layer (usually has "copy" appended)
-    new_layers = get_layers()
-    for layer in new_layers:
-        if layer['name'] not in [l['name'] for l in layers]:
-            return layer
-
-    raise RuntimeError(f"Failed to duplicate layer: {layer_name}")
-
-
-def delete_layer(layer_name: str) -> bool:
+def delete_layer(layer_name: str, layer_index: Optional[int] = None) -> bool:
     """
     Delete a layer from the current document.
 
     Args:
         layer_name: Name of the layer to delete
+        layer_index: Optional index of the layer (1-based, for layers with duplicate names)
 
     Returns:
         bool: True if deleted successfully
@@ -437,20 +470,45 @@ def delete_layer(layer_name: str) -> bool:
         ValueError: If layer doesn't exist
         RuntimeError: If deletion fails
     """
-    # Verify layer exists
-    layers = get_layers()
-    if not any(layer['name'] == layer_name for layer in layers):
-        raise ValueError(f"Layer '{layer_name}' not found")
-
-    script = f'tell application "Pixelmator Pro" to delete layer "{layer_name}" of front document'
-    _run_applescript(script)
-
-    # Verify layer was deleted
-    updated_layers = get_layers()
-    if any(layer['name'] == layer_name for layer in updated_layers):
-        raise RuntimeError(f"Failed to delete layer: {layer_name}")
-
-    return True
+    if layer_index is not None:
+        # Delete by index (more reliable for duplicate names)
+        script = f'''
+        tell application "Pixelmator Pro"
+            tell front document
+                if {layer_index} > count of layers then
+                    error "Layer index out of range"
+                end if
+                set targetLayer to layer {layer_index}
+                if name of targetLayer is not "{layer_name}" then
+                    error "Layer name mismatch at index"
+                end if
+                delete layer {layer_index}
+                return "deleted"
+            end tell
+        end tell
+        '''
+    else:
+        # Delete by name (original behavior)
+        script = f'''
+        tell application "Pixelmator Pro"
+            tell front document
+                if not (exists layer "{layer_name}") then
+                    error "Layer not found"
+                end if
+                delete layer "{layer_name}"
+                return "deleted"
+            end tell
+        end tell
+        '''
+    
+    try:
+        result = _run_applescript(script)
+        return result.strip() == "deleted"
+        
+    except RuntimeError as e:
+        if "Layer not found" in str(e) or "Layer index out of range" in str(e) or "Layer name mismatch" in str(e):
+            raise ValueError(f"Layer '{layer_name}' not found") from e
+        raise RuntimeError(f"Failed to delete layer: {layer_name}") from e
 
 
 def export_current_view(output_path: str, format: str = 'PNG') -> Dict[str, Any]:

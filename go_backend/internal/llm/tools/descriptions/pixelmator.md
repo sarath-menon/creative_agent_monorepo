@@ -1,12 +1,10 @@
-Automates Pixelmator Pro image editing operations via AppleScript integration.
+# Image editing tool
 
 This tool provides programmatic access to Pixelmator Pro functionality for image editing workflows.
 
-## Prerequisites
+## Instructions
 
-- Pixelmator Pro must be installed and running on macOS
-- The tool uses AppleScript automation via the bash tool
-- Requires appropriate system permissions for application automation
+Use `uv run python -c "import sys; sys.path.append('$<workdir>/tools/pixelmator'); from image_editing import *; operation_name(args)"` to execute Pixelmator Pro operations.
 
 ## Available Operations
 
