@@ -13,6 +13,11 @@ import {
 } from '@/components/ui/kibo-ui/ai/input';
 import { AIMessage, AIMessageContent } from '@/components/ui/kibo-ui/ai/message';
 import {
+  AIReasoning,
+  AIReasoningContent,
+  AIReasoningTrigger,
+} from '@/components/ui/kibo-ui/ai/reasoning';
+import {
   AITool,
   AIToolContent,
   AIToolHeader,
@@ -61,6 +66,8 @@ type Message = {
   from: 'user' | 'assistant';
   toolCalls?: ToolCall[];
   attachments?: Attachment[];
+  reasoning?: string;
+  reasoningDuration?: number;
 };
 
 // Helper function to extract todos from todo_write tool calls (works with both ToolCall and SSE formats)
@@ -294,7 +301,9 @@ export function ChatApp() {
         const newMessages = [...prev, { 
           content: sseStream.finalContent!, 
           from: 'assistant',
-          toolCalls: convertedToolCalls.length > 0 ? convertedToolCalls : undefined
+          toolCalls: convertedToolCalls.length > 0 ? convertedToolCalls : undefined,
+          reasoning: sseStream.reasoning,
+          reasoningDuration: sseStream.reasoningDuration
         }];
         
         // Check if this message contains an exit_plan_mode tool and show options
@@ -431,7 +440,15 @@ export function ChatApp() {
             >
               <AIMessageContent >
                 {message.from === 'assistant' ? (
-                  <ResponseRenderer content={message.content} />
+                  <>
+                    {message.reasoning && (
+                      <AIReasoning className="w-full mb-4" isStreaming={false} duration={message.reasoningDuration || undefined}>
+                        <AIReasoningTrigger />
+                        <AIReasoningContent>{message.reasoning}</AIReasoningContent>
+                      </AIReasoning>
+                    )}
+                    <ResponseRenderer content={message.content} />
+                  </>
                 ) : (
                   <div>
                     <MessageAttachmentDisplay attachments={message.attachments || []} />
@@ -485,6 +502,13 @@ export function ChatApp() {
               from="assistant"
             >
               <AIMessageContent>
+                {/* Show reasoning during streaming if available */}
+                {sseStream.reasoning && (
+                  <AIReasoning className="w-full mb-4" isStreaming={true} duration={sseStream.reasoningDuration || undefined}>
+                    <AIReasoningTrigger />
+                    <AIReasoningContent>{sseStream.reasoning}</AIReasoningContent>
+                  </AIReasoning>
+                )}
                 {sseStream.toolCalls.length > 0 ? (
                   <>
                     {/* Render streaming todos inline without tool wrapper */}

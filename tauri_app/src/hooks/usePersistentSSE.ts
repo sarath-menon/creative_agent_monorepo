@@ -19,6 +19,8 @@ export type PersistentSSEState = {
   completed: boolean;
   processing: boolean; // True when processing a message
   isPaused: boolean; // True when session is paused
+  reasoning: string | null; // Reasoning content from the assistant
+  reasoningDuration: number | null; // Reasoning duration in seconds
 };
 
 export type PersistentSSEHook = PersistentSSEState & {
@@ -37,6 +39,8 @@ export function usePersistentSSE(sessionId: string): PersistentSSEHook {
     completed: false,
     processing: false,
     isPaused: false,
+    reasoning: null,
+    reasoningDuration: null,
   });
   
   const eventSourceRef = useRef<EventSource | null>(null);
@@ -64,6 +68,8 @@ export function usePersistentSSE(sessionId: string): PersistentSSEHook {
       completed: false,
       processing: false,
       isPaused: false,
+      reasoning: null,
+      reasoningDuration: null,
     });
     
     toolCallsRef.current.clear();
@@ -124,6 +130,8 @@ export function usePersistentSSE(sessionId: string): PersistentSSEHook {
         setState(prev => ({
           ...prev,
           finalContent: data.content || '',
+          reasoning: data.reasoning || null,
+          reasoningDuration: data.reasoningDuration || null,
           completed: true,
           processing: false, // Message processing complete
         }));
@@ -216,6 +224,8 @@ export function usePersistentSSE(sessionId: string): PersistentSSEHook {
       finalContent: null,
       completed: false,
       processing: true, // Mark as processing when sending message
+      reasoning: null,
+      reasoningDuration: null,
     }));
     
     toolCallsRef.current.clear();

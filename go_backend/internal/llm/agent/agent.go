@@ -68,7 +68,8 @@ type agent struct {
 	titleProvider     provider.Provider
 	summarizeProvider provider.Provider
 
-	activeRequests sync.Map
+	activeRequests    sync.Map
+	reasoningStartTimes sync.Map // Maps message ID to reasoning start time
 }
 
 func NewAgent(
@@ -545,8 +546,11 @@ func (a *agent) processEvent(ctx context.Context, sessionID string, assistantMsg
 
 	switch event.Type {
 	case provider.EventThinkingDelta:
-
-		assistantMsg.AppendReasoningContent(event.Content)
+		// Track reasoning start time on first thinking delta
+		if assistantMsg.ReasoningContent().Thinking == "" {
+			a.reasoningStartTimes.Store(assistantMsg.ID, time.Now())
+		}
+		assistantMsg.AppendReasoningContent(event.Thinking)
 		// Publish thinking event for real-time streaming
 		a.Publish(pubsub.CreatedEvent, AgentEvent{
 			Type:      AgentEventTypeResponse,
@@ -593,6 +597,16 @@ func (a *agent) processEvent(ctx context.Context, sessionID string, assistantMsg
 		logging.Error(event.Error.Error())
 		return event.Error
 	case provider.EventComplete:
+		// Calculate reasoning duration if we have reasoning content
+		if assistantMsg.ReasoningContent().Thinking != "" {
+			if startTimeValue, exists := a.reasoningStartTimes.LoadAndDelete(assistantMsg.ID); exists {
+				if startTime, ok := startTimeValue.(time.Time); ok {
+					duration := int64(time.Since(startTime).Seconds())
+					assistantMsg.SetReasoningDuration(duration)
+				}
+			}
+		}
+		
 		assistantMsg.SetToolCalls(event.Response.ToolCalls)
 		assistantMsg.AddFinish(event.Response.FinishReason)
 		if err := a.messages.Update(ctx, *assistantMsg); err != nil {
